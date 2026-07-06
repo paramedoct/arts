@@ -13,17 +13,26 @@ source "$ROOT_DIR/utils/source.sh"
 source_modules \
   utils/db.sh \
   utils/profile.sh \
-  utils/image.sh
+  utils/image.sh \
+  utils/sequence.sh \
+  utils/archive.sh
 
 main() {
   local artist
+  local mime
   [ "$#" -eq 1 ] || usage
   artist=$1
   profile_prepare
   UPLOAD_FILE=$(mktemp "$ARTS_STATE_DIR/.upload.XXXXXX")
   trap 'rm -f "$UPLOAD_FILE"' EXIT HUP INT TERM
   cat >"$UPLOAD_FILE"
-  image_add "$artist" "$UPLOAD_FILE"
+  mime=$(file -b --mime-type -- "$UPLOAD_FILE")
+  case "$mime" in
+    application/zip | application/x-zip | application/x-zip-compressed)
+      archive_add "$artist" "$UPLOAD_FILE"
+      ;;
+    *) image_add "$artist" "$UPLOAD_FILE" ;;
+  esac
 }
 
 main "$@"

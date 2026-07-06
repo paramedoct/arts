@@ -2,4 +2,4 @@
 set -euo pipefail
 
 sudo apt update
-sudo apt install chafa file sqlite3
+sudo apt install chafa file sqlite3 unzip

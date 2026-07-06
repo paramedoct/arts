@@ -21,6 +21,7 @@
 - avoid bash 4+ features such as `mapfile`, associative arrays, and `readarray`
 - prefer simple loops and explicit data collection over version-specific helpers
 - keep application logic in shell scripts and persist metadata with `sqlite3`
+- treat image input as an SSH-friendly stdin stream; do not read client paths
 
 ## shell format
 

@@ -76,6 +76,7 @@ image_add() {
   local id
   artist=$1
   file=$2
+  name=$3
   image_validate_artist "$artist"
   if [ ! -f "$file" ] || [ ! -r "$file" ]; then
     echo "image is not a readable file: $file" >&2
@@ -87,7 +88,6 @@ image_add() {
     printf '%s\n' "$existing_id"
     return 0
   fi
-  name=${file##*/}
   mime=$(file -b --mime-type -- "$file")
   case "$mime" in
     image/*) ;;

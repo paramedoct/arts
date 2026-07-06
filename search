@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
-  echo "$0 [tag...] [--limit <count>]" >&2
+  echo "$0 [tag...] [--limit <count|auto>]" >&2
   exit 1
 }
 
@@ -22,9 +22,11 @@ main() {
   local limit
   local targets
   local arg
+  local grid_cols
   local -a tags
   local -a result_targets
-  limit=12
+  DISPLAY_GRID_COLS=auto
+  limit=auto
   tags=()
   result_targets=()
   while [ "$#" -gt 0 ]; do
@@ -42,7 +44,16 @@ main() {
       *) tags+=("$arg") ;;
     esac
   done
-  display_validate_limit "$limit"
+  if [ "$limit" = auto ]; then
+    if [ -t 0 ] && [ -t 1 ]; then
+      read -r limit grid_cols < <(display_auto_layout)
+      DISPLAY_GRID_COLS=$grid_cols
+    else
+      limit=12
+    fi
+  else
+    display_validate_limit "$limit"
+  fi
   profile_prepare
   targets=$(search_targets "${tags[@]}")
   while IFS= read -r arg; do

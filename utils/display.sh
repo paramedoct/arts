@@ -7,6 +7,45 @@ display_validate_limit() {
   esac
 }
 
+display_auto_layout() {
+  local rows
+  local cols
+  local grid_cols
+  local grid_rows
+  local count
+  local required
+  local limit
+  rows=24
+  cols=80
+  read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
+  case "$rows:$cols" in
+    *[!0-9:]* | 0:* | *:0) rows=24; cols=80 ;;
+  esac
+  grid_cols=$((cols / 20))
+  if ((grid_cols < 1)); then grid_cols=1; fi
+  grid_rows=1
+  limit=$grid_cols
+  while ((grid_cols * grid_rows <= 200)); do
+    count=$((grid_cols * grid_rows))
+    required=$((4 + count + grid_rows * 8))
+    if ((required > rows)); then break; fi
+    limit=$count
+    grid_rows=$((grid_rows + 1))
+  done
+  printf '%s %s\n' "$limit" "$grid_cols"
+}
+
+display_read_key() {
+  local key
+  local rest
+  IFS= read -r -n 1 key </dev/tty
+  if [ "$key" = $'\033' ]; then
+    IFS= read -r -n 2 rest </dev/tty
+    key=$key$rest
+  fi
+  printf '%s' "$key"
+}
+
 display_info() {
   local id
   id=$1
@@ -169,12 +208,14 @@ display_sequence_browser() {
 }
 
 display_previews() {
+  local grid
   local help
   local path
+  grid=${DISPLAY_GRID_COLS:-auto}
   help=$(chafa --help 2>&1)
   case "$help" in
     *--grid*)
-      chafa --format sixels --grid auto --label on --animate off "$@"
+      chafa --format sixels --grid "$grid" --label on --animate off "$@"
       ;;
     *)
       for path in "$@"; do

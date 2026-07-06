@@ -65,6 +65,16 @@ display_page() {
   local end
   local index
   local id
+  local record
+  local info
+  local sha
+  local artist
+  local shown_id
+  local original_name
+  local tags
+  local sequence
+  local path
+  local -a paths
   page=$1
   limit=$2
   shift 2
@@ -74,17 +84,30 @@ display_page() {
   if ((end > total)); then
     end=$total
   fi
+  paths=()
   printf 'page %s/%s  images %s-%s of %s\n\n' \
     "$((page + 1))" "$(((total + limit - 1) / limit))" \
     "$((start + 1))" "$end" "$total"
   index=0
   for id in "$@"; do
     if ((index >= start && index < end)); then
-      display_image "$id"
-      printf '\n'
+      record=$(image_require "$id")
+      IFS=$'\t' read -r _ sha artist _ <<<"$record"
+      info=$(display_info "$id")
+      IFS=$'\t' read -r shown_id artist original_name tags sequence <<<"$info"
+      path=$(image_path "$artist" "$sha")
+      if [ ! -r "$path" ]; then
+        echo "stored image not found: $path" >&2
+        return 1
+      fi
+      printf '[%s] id: %s  artist: %s  file: %s  sequence: %s\n' \
+        "$((index + 1))" "$shown_id" "$artist" "$original_name" "$sequence"
+      paths+=("$path")
     fi
     index=$((index + 1))
   done
+  printf '\n'
+  chafa --grid auto --label off --animate off "${paths[@]}"
 }
 
 display_pager() {

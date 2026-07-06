@@ -11,7 +11,7 @@ display_info() {
   local id
   id=$1
   db_value "
-SELECT images.id || char(9) || images.artist || char(9) ||
+SELECT images.id || char(9) || artists.name || char(9) ||
        images.original_name || char(9) ||
        COALESCE((
          SELECT group_concat(name, ',') FROM (
@@ -24,6 +24,7 @@ SELECT images.id || char(9) || images.artist || char(9) ||
        ), '-') || char(9) ||
        COALESCE(sequences.name || ':' || sequence_items.position, '-')
 FROM images
+JOIN artists ON artists.id = images.artist_id
 LEFT JOIN sequence_items ON sequence_items.image_id = images.id
 LEFT JOIN sequences ON sequences.id = sequence_items.sequence_id
 WHERE images.id = $id;

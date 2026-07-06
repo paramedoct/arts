@@ -18,6 +18,7 @@ db_init() {
   local migration
   local name
   local sql
+  local violations
   db_run "
 CREATE TABLE IF NOT EXISTS schema_migrations (
   name TEXT PRIMARY KEY,
@@ -33,11 +34,17 @@ SELECT name FROM schema_migrations WHERE name = $(db_quote "$name");
       continue
     fi
     sql=$(<"$migration")
-    db_run "
+    sqlite3 -batch -bail -cmd 'PRAGMA foreign_keys = OFF;' \
+      "$ARTS_DB_FILE" "
 BEGIN IMMEDIATE;
 $sql
 INSERT INTO schema_migrations (name) VALUES ($(db_quote "$name"));
 COMMIT;
 "
+    violations=$(db_value "PRAGMA foreign_key_check;")
+    if [ -n "$violations" ]; then
+      echo "foreign key check failed after migration: $name" >&2
+      return 1
+    fi
   done
 }

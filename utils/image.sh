@@ -40,7 +40,12 @@ image_record() {
   db_value "
 SELECT id || char(9) || sha256 || char(9) || artist || char(9) ||
        original_name || char(9) || mime_type || char(9) || byte_size
-FROM images WHERE id = $id;
+FROM (
+  SELECT images.id, images.sha256, artists.name AS artist,
+         images.original_name, images.mime_type, images.byte_size
+  FROM images
+  JOIN artists ON artists.id = images.artist_id
+) WHERE id = $id;
 "
 }
 
@@ -111,8 +116,10 @@ image_add() {
   if ! id=$(db_value "
 PRAGMA foreign_keys = ON;
 BEGIN IMMEDIATE;
-INSERT INTO images (sha256, artist, original_name, mime_type, byte_size)
-VALUES ($(db_quote "$sha"), $artist_sql, $name_sql, $mime_sql, $size);
+INSERT OR IGNORE INTO artists (name) VALUES ($artist_sql);
+INSERT INTO images (sha256, artist_id, original_name, mime_type, byte_size)
+SELECT $(db_quote "$sha"), id, $name_sql, $mime_sql, $size
+FROM artists WHERE name = $artist_sql;
 SELECT last_insert_rowid();
 COMMIT;
 "); then
@@ -132,7 +139,14 @@ image_remove() {
   record=$(image_require "$id")
   IFS=$'\t' read -r _ sha artist _ <<<"$record"
   path=$(image_path "$artist" "$sha")
-  db_run "PRAGMA foreign_keys = ON; DELETE FROM images WHERE id = $id;"
+  db_run "
+BEGIN IMMEDIATE;
+DELETE FROM images WHERE id = $id;
+DELETE FROM artists WHERE NOT EXISTS (
+  SELECT 1 FROM images WHERE images.artist_id = artists.id
+);
+COMMIT;
+"
   rm -f -- "$path"
   rmdir "$ARTS_IMAGES_DIR/$artist" 2>/dev/null || true
 }
@@ -157,7 +171,17 @@ image_set_artist() {
   new_path=$(image_path "$artist" "$sha")
   mkdir -p "$ARTS_IMAGES_DIR/$artist"
   mv -- "$old_path" "$new_path"
-  if ! db_run "UPDATE images SET artist = $(db_quote "$artist") WHERE id = $id;"; then
+  if ! db_run "
+BEGIN IMMEDIATE;
+INSERT OR IGNORE INTO artists (name) VALUES ($(db_quote "$artist"));
+UPDATE images
+SET artist_id = (SELECT id FROM artists WHERE name = $(db_quote "$artist"))
+WHERE id = $id;
+DELETE FROM artists WHERE NOT EXISTS (
+  SELECT 1 FROM images WHERE images.artist_id = artists.id
+);
+COMMIT;
+"; then
     mv -- "$new_path" "$old_path"
     return 1
   fi

@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-UPLOAD_FILE=
 
 usage() {
-  echo "$0 <artist> [file...]" >&2
+  echo "$0 <artist> <file...>" >&2
   exit 1
 }
 
@@ -52,28 +51,21 @@ main() {
   local artist
   local input
   local status
-  [ "$#" -ge 1 ] || usage
+  [ "$#" -ge 2 ] || usage
   artist=$1
   shift
   profile_prepare
-  if [ "$#" -gt 0 ]; then
-    for input in "$@"; do
-      if add_file "$artist" "$input"; then
-        continue
-      else
-        status=$?
-      fi
-      if [ "$status" -eq 2 ]; then
-        continue
-      fi
-      return "$status"
-    done
-    return 0
-  fi
-  UPLOAD_FILE=$(mktemp "$ARTS_STATE_DIR/.upload.XXXXXX")
-  trap 'rm -f "$UPLOAD_FILE"' EXIT HUP INT TERM
-  cat >"$UPLOAD_FILE"
-  add_file "$artist" "$UPLOAD_FILE"
+  for input in "$@"; do
+    if add_file "$artist" "$input"; then
+      continue
+    else
+      status=$?
+    fi
+    if [ "$status" -eq 2 ]; then
+      continue
+    fi
+    return "$status"
+  done
 }
 
 main "$@"

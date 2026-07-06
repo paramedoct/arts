@@ -1,77 +1,74 @@
-sequence_validate_name() {
-  if [ -z "${1:-}" ]; then
-    echo "sequence name must not be empty" >&2
-    return 1
-  fi
+sequence_validate_id() {
+  case "${1:-}" in
+    '' | *[!0-9]*)
+      echo "invalid sequence id: ${1:-}" >&2
+      return 1
+      ;;
+  esac
 }
 
-sequence_set() {
-  local name
-  local name_sql
+sequence_add() {
   local statements
   local position
   local image_id
-  name=$1
-  shift
-  sequence_validate_name "$name"
   [ "$#" -ge 1 ] || {
     echo "sequence requires at least one image" >&2
     return 1
   }
-  name_sql=$(db_quote "$name")
   statements="
 PRAGMA foreign_keys = ON;
 BEGIN IMMEDIATE;
-INSERT OR IGNORE INTO sequences (name) VALUES ($name_sql);
-DELETE FROM sequence_items
-WHERE sequence_id = (SELECT id FROM sequences WHERE name = $name_sql);"
+INSERT INTO sequences DEFAULT VALUES;"
   position=1
   for image_id in "$@"; do
     image_require "$image_id" >/dev/null
     statements="$statements
 INSERT INTO sequence_items (sequence_id, image_id, position)
-SELECT id, $image_id, $position FROM sequences WHERE name = $name_sql;"
+SELECT max(id), $image_id, $position FROM sequences;"
     position=$((position + 1))
   done
   statements="$statements
+SELECT max(id) FROM sequences;
 COMMIT;"
-  db_run "$statements"
+  db_value "$statements"
 }
 
 sequence_remove() {
-  local name
-  name=$1
-  sequence_validate_name "$name"
-  if [ -z "$(db_value "SELECT id FROM sequences WHERE name = $(db_quote "$name");")" ]; then
-    echo "sequence not found: $name" >&2
-    return 1
-  fi
-  db_run "DELETE FROM sequences WHERE name = $(db_quote "$name");"
+  local id
+  id=$1
+  sequence_require "$id" >/dev/null
+  db_run "DELETE FROM sequences WHERE id = $id;"
 }
 
 sequence_list() {
   db_value "
-SELECT sequences.name || char(9) || count(sequence_items.image_id)
+SELECT sequences.id || char(9) || count(sequence_items.image_id)
 FROM sequences
 LEFT JOIN sequence_items ON sequence_items.sequence_id = sequences.id
 GROUP BY sequences.id
-ORDER BY sequences.name;
+ORDER BY sequences.id;
 "
 }
 
-sequence_image_ids() {
-  local name
-  name=$1
-  sequence_validate_name "$name"
-  if [ -z "$(db_value "SELECT id FROM sequences WHERE name = $(db_quote "$name");")" ]; then
-    echo "sequence not found: $name" >&2
+sequence_require() {
+  local id
+  id=$1
+  sequence_validate_id "$id"
+  if [ -z "$(db_value "SELECT id FROM sequences WHERE id = $id;")" ]; then
+    echo "sequence not found: $id" >&2
     return 1
   fi
+  printf '%s\n' "$id"
+}
+
+sequence_image_ids() {
+  local id
+  id=$1
+  sequence_require "$id" >/dev/null
   db_value "
 SELECT sequence_items.image_id
 FROM sequence_items
-JOIN sequences ON sequences.id = sequence_items.sequence_id
-WHERE sequences.name = $(db_quote "$name")
+WHERE sequence_items.sequence_id = $id
 ORDER BY sequence_items.position;
 "
 }

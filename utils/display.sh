@@ -174,7 +174,7 @@ display_previews() {
   help=$(chafa --help 2>&1)
   case "$help" in
     *--grid*)
-      chafa --format sixels --grid auto --label off --animate off "$@"
+      chafa --format sixels --grid auto --label on --animate off "$@"
       ;;
     *)
       for path in "$@"; do
@@ -192,6 +192,7 @@ display_page() {
   local end
   local index
   local target
+  local type
   local id
   local record
   local info
@@ -201,6 +202,8 @@ display_page() {
   local tags
   local sequence
   local path
+  local preview
+  local preview_dir
   local -a paths
   page=$1
   limit=$2
@@ -212,13 +215,15 @@ display_page() {
     end=$total
   fi
   paths=()
+  preview_dir=$(mktemp -d "$ARTS_STATE_DIR/.previews.XXXXXX")
   printf 'page %s/%s  images %s-%s of %s\n\n' \
     "$((page + 1))" "$(((total + limit - 1) / limit))" \
     "$((start + 1))" "$end" "$total"
   index=0
   for target in "$@"; do
     if ((index >= start && index < end)); then
-      case "$(object_type "$target")" in
+      type=$(object_type "$target")
+      case "$type" in
         image) id=$target ;;
         sequence)
           id=$(db_value "
@@ -230,6 +235,7 @@ WHERE sequence_objects.object_id = $target
 ORDER BY position LIMIT 1;
 ")
           if [ -z "$id" ]; then
+            rm -rf "$preview_dir"
             echo "sequence not found or empty: $target" >&2
             return 1
           fi
@@ -241,18 +247,24 @@ ORDER BY position LIMIT 1;
       IFS=$'\t' read -r shown_id artist tags sequence <<<"$info"
       path=$(image_path "$artist" "$sha")
       if [ ! -r "$path" ]; then
+        rm -rf "$preview_dir"
         echo "stored image not found: $path" >&2
         return 1
       fi
       printf '[%s] id: %s  type: %s  artist: %s  sequence: %s\n' \
-        "$((index + 1))" "$target" "$(object_type "$target")" \
-        "$artist" "$sequence"
-      paths+=("$path")
+        "$((index + 1))" "$target" "$type" "$artist" "$sequence"
+      preview=$(printf '%s/[%s]' "$preview_dir" "$((index + 1))")
+      ln -s "$path" "$preview"
+      paths+=("$preview")
     fi
     index=$((index + 1))
   done
   printf '\n'
-  display_previews "${paths[@]}"
+  if ! display_previews "${paths[@]}"; then
+    rm -rf "$preview_dir"
+    return 1
+  fi
+  rm -rf "$preview_dir"
 }
 
 display_pager() {

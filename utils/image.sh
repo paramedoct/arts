@@ -87,8 +87,8 @@ JOIN image_objects ON image_objects.image_id = images.id
 WHERE images.sha256 = $(db_quote "$sha");
 ")
   if [ -n "$existing_id" ]; then
-    printf '%s\n' "$existing_id"
-    return 0
+    echo "duplicate image skipped: sha256 $sha" >&2
+    return 2
   fi
   mime=$(file -b --mime-type -- "$file")
   case "$mime" in

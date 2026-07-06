@@ -5,6 +5,13 @@ archive_require_unzip() {
   fi
 }
 
+archive_remove_images() {
+  local image_id
+  for image_id in "$@"; do
+    image_remove "$image_id"
+  done
+}
+
 archive_add() {
   local artist
   local archive
@@ -16,6 +23,7 @@ archive_add() {
   local image_id
   local sequence_id
   local count
+  local status
   local -a image_ids
   local -a files
   artist=$1
@@ -59,13 +67,22 @@ archive_add() {
     return 1
   fi
   for file in "${files[@]}"; do
-    if ! image_id=$(image_add "$artist" "$file"); then
-      rm -rf "$work_dir"
-      return 1
+    if image_id=$(image_add "$artist" "$file"); then
+      image_ids+=("$image_id")
+      continue
+    else
+      status=$?
     fi
-    image_ids+=("$image_id")
+    archive_remove_images "${image_ids[@]}"
+    rm -rf "$work_dir"
+    if [ "$status" -eq 2 ]; then
+      echo "sequence skipped: zip contains a duplicate image" >&2
+      return 2
+    fi
+    return "$status"
   done
   if ! sequence_id=$(sequence_add "${image_ids[@]}"); then
+    archive_remove_images "${image_ids[@]}"
     rm -rf "$work_dir"
     return 1
   fi

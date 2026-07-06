@@ -22,6 +22,7 @@ add_file() {
   local artist
   local input
   local mime
+  local status
   artist=$1
   input=$2
   if [ ! -f "$input" ] || [ ! -r "$input" ]; then
@@ -33,20 +34,39 @@ add_file() {
     application/zip | application/x-zip | application/x-zip-compressed)
       archive_add "$artist" "$input"
       ;;
-    *) image_add "$artist" "$input" ;;
+    *)
+      if image_add "$artist" "$input"; then
+        return 0
+      else
+        status=$?
+      fi
+      if [ "$status" -eq 2 ]; then
+        return 0
+      fi
+      return "$status"
+      ;;
   esac
 }
 
 main() {
   local artist
   local input
+  local status
   [ "$#" -ge 1 ] || usage
   artist=$1
   shift
   profile_prepare
   if [ "$#" -gt 0 ]; then
     for input in "$@"; do
-      add_file "$artist" "$input"
+      if add_file "$artist" "$input"; then
+        continue
+      else
+        status=$?
+      fi
+      if [ "$status" -eq 2 ]; then
+        continue
+      fi
+      return "$status"
     done
     return 0
   fi

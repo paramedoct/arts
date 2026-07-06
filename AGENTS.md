@@ -51,6 +51,7 @@
 - store the SQLite database and image files below `ARTS_HOME`
 - name stored image files by their lowercase SHA-256 digest without an extension
 - group stored image files under their artist directory
+- validate imported images and record their MIME type with `file`
 - treat SQLite constraints and transactions as the source of truth
 - quote paths and SQL values defensively
 

@@ -4,7 +4,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UPLOAD_FILE=
 
 usage() {
-  echo "$0 <artist>" >&2
+  echo "$0 <artist> [file...]" >&2
   exit 1
 }
 
@@ -18,22 +18,42 @@ source_modules \
   utils/sequence.sh \
   utils/archive.sh
 
+add_file() {
+  local artist
+  local input
+  local mime
+  artist=$1
+  input=$2
+  if [ ! -f "$input" ] || [ ! -r "$input" ]; then
+    echo "input is not a readable file: $input" >&2
+    return 1
+  fi
+  mime=$(file -b --mime-type -- "$input")
+  case "$mime" in
+    application/zip | application/x-zip | application/x-zip-compressed)
+      archive_add "$artist" "$input"
+      ;;
+    *) image_add "$artist" "$input" ;;
+  esac
+}
+
 main() {
   local artist
-  local mime
-  [ "$#" -eq 1 ] || usage
+  local input
+  [ "$#" -ge 1 ] || usage
   artist=$1
+  shift
   profile_prepare
+  if [ "$#" -gt 0 ]; then
+    for input in "$@"; do
+      add_file "$artist" "$input"
+    done
+    return 0
+  fi
   UPLOAD_FILE=$(mktemp "$ARTS_STATE_DIR/.upload.XXXXXX")
   trap 'rm -f "$UPLOAD_FILE"' EXIT HUP INT TERM
   cat >"$UPLOAD_FILE"
-  mime=$(file -b --mime-type -- "$UPLOAD_FILE")
-  case "$mime" in
-    application/zip | application/x-zip | application/x-zip-compressed)
-      archive_add "$artist" "$UPLOAD_FILE"
-      ;;
-    *) image_add "$artist" "$UPLOAD_FILE" ;;
-  esac
+  add_file "$artist" "$UPLOAD_FILE"
 }
 
 main "$@"

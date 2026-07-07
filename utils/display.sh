@@ -12,7 +12,6 @@ display_auto_layout() {
   local cols
   local grid_cols
   local grid_rows
-  local count
   local required
   local limit
   rows=24
@@ -26,10 +25,9 @@ display_auto_layout() {
   grid_rows=1
   limit=$grid_cols
   while ((grid_cols * grid_rows <= 200)); do
-    count=$((grid_cols * grid_rows))
-    required=$((4 + count + grid_rows * 8))
+    required=$((4 + grid_rows * 16))
     if ((required > rows)); then break; fi
-    limit=$count
+    limit=$((grid_cols * grid_rows))
     grid_rows=$((grid_rows + 1))
   done
   printf '%s %s\n' "$limit" "$grid_cols"
@@ -185,7 +183,7 @@ display_sequence_browser() {
       index=$((index + 1))
     done
     printf '\033[2;%sH' "$((list_width + 3))"
-    if ! chafa --animate off \
+    if ! chafa --animate on --duration 0 \
       --size "${image_width}x${image_height}" "${paths[$selected]}"; then
       printf '\033[%s;1H\n' "$rows"
       return 1
@@ -215,7 +213,8 @@ display_previews() {
   help=$(chafa --help 2>&1)
   case "$help" in
     *--grid*)
-      chafa --grid "$grid" --label on --link off --animate off "$@"
+      chafa --grid "$grid" --label on --link off \
+        --animate on --duration 0 "$@"
       ;;
     *)
       for path in "$@"; do
@@ -236,12 +235,8 @@ display_page() {
   local type
   local id
   local record
-  local info
   local sha
   local artist
-  local shown_id
-  local tags
-  local sequence
   local path
   local preview
   local preview_dir
@@ -257,9 +252,6 @@ display_page() {
   fi
   paths=()
   preview_dir=$(mktemp -d "$ARTS_STATE_DIR/.previews.XXXXXX")
-  printf 'page %s/%s  images %s-%s of %s\n\n' \
-    "$((page + 1))" "$(((total + limit - 1) / limit))" \
-    "$((start + 1))" "$end" "$total"
   index=0
   for target in "$@"; do
     if ((index >= start && index < end)); then
@@ -284,23 +276,18 @@ ORDER BY position LIMIT 1;
       esac
       record=$(image_require "$id")
       IFS=$'\t' read -r _ sha artist _ <<<"$record"
-      info=$(display_info "$id")
-      IFS=$'\t' read -r shown_id artist tags sequence <<<"$info"
       path=$(image_path "$artist" "$sha")
       if [ ! -r "$path" ]; then
         rm -rf "$preview_dir"
         echo "stored image not found: $path" >&2
         return 1
       fi
-      printf '[%s] id: %s  type: %s  artist: %s  sequence: %s\n' \
-        "$((index + 1))" "$target" "$type" "$artist" "$sequence"
       preview=$(printf '%s/[%s]' "$preview_dir" "$((index + 1))")
       ln -s "$path" "$preview"
       paths+=("$preview")
     fi
     index=$((index + 1))
   done
-  printf '\n'
   if ! display_previews "${paths[@]}"; then
     rm -rf "$preview_dir"
     return 1
@@ -314,6 +301,12 @@ display_pager() {
   local pages
   local page
   local key
+  local rest
+  local selected
+  local start
+  local end
+  local position
+  local target
   limit=$1
   shift
   display_validate_limit "$limit"
@@ -329,11 +322,15 @@ display_pager() {
       printf '\033[2J\033[H'
     fi
     display_page "$page" "$limit" "$@"
-    if [ ! -t 0 ] || [ ! -t 1 ] || ((pages == 1)); then
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
       return 0
     fi
-    printf '[k] previous [j] next [q] quit: '
+    printf '[number] show [k] previous [j] next [q] quit: '
     key=$(display_read_key)
+    if case "$key" in [0-9]) true ;; *) false ;; esac; then
+      IFS= read -r rest </dev/tty
+      key=$key$rest
+    fi
     printf '\n'
     case "$key" in
       k | K | $'\033[A')
@@ -347,6 +344,23 @@ display_pager() {
         fi
         ;;
       q | Q) return 0 ;;
+      *[!0-9]* | '') ;;
+      *)
+        selected=$((10#$key - 1))
+        start=$((page * limit))
+        end=$((start + limit))
+        if ((end > total)); then end=$total; fi
+        if ((selected >= start && selected < end)) &&
+          [ -n "${DISPLAY_SELECT_COMMAND:-}" ]; then
+          position=$((selected + 1))
+          target=${!position}
+          "$DISPLAY_SELECT_COMMAND" "$target"
+          if [ "$(object_type "$target")" = image ]; then
+            printf '[any key] back'
+            display_read_key >/dev/null
+          fi
+        fi
+        ;;
     esac
   done
 }

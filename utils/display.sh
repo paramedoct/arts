@@ -79,6 +79,8 @@ display_image() {
   local tags
   local sequence
   local path
+  local rows
+  local cols
   id=$1
   record=$(image_require "$id")
   IFS=$'\t' read -r _ sha artist _ <<<"$record"
@@ -89,8 +91,15 @@ display_image() {
     echo "stored image not found: $path" >&2
     return 1
   fi
-  printf 'image %s  ·  %s  ·  tags %s\n' "$shown_id" "$artist" "$tags"
-  chafa "$path"
+  rows=24
+  cols=80
+  read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
+  if ((rows < 10)); then rows=10; fi
+  if ((cols < 20)); then cols=20; fi
+  chafa --align top,left --size "${cols}x$((rows - 5))" "$path"
+  printf 'image %s\n' "$shown_id"
+  printf 'artist %s\n' "$artist"
+  printf 'tags %s\n' "$tags"
 }
 
 display_image_browser() {
@@ -103,7 +112,7 @@ display_image_browser() {
     printf '\033[2J\033[H'
     display_image "$id"
     [ -z "$message" ] || printf '%s\n' "$message"
-    printf '[a] tag  [r] untag  [d] delete  [q] back: '
+    printf '[a]tag [r]untag [d]delete [q]back: '
     key=$(display_read_key)
     printf '\n'
     message=
@@ -190,9 +199,9 @@ display_sequence_browser() {
     list_width=$((cols / 4))
     if ((list_width < 20)); then list_width=20; fi
     if ((list_width > 32)); then list_width=32; fi
-    image_width=$((cols - list_width - 3))
-    image_height=$((rows - 2))
-    visible=$((rows - 2))
+    image_width=$((cols - list_width - 1))
+    image_height=$((rows - 1))
+    visible=$((rows - 5))
     start=$((selected - visible / 2))
     if ((start < 0)); then start=0; fi
     if ((start + visible > total)); then start=$((total - visible)); fi
@@ -200,30 +209,32 @@ display_sequence_browser() {
     end=$((start + visible))
     if ((end > total)); then end=$total; fi
     printf '\033[2J\033[H'
-    printf 'sequence %s  ·  %s/%s  ·  %s  ·  tags %s\n' \
-      "$sequence_id" "$((selected + 1))" "$total" \
-      "${artists[$selected]}" "${tag_values[$selected]}"
-    index=$start
-    while ((index < end)); do
-      label=$(printf '%3s  %s' "$((index + 1))" "${artists[$index]}")
-      label=${label:0:$((list_width - 1))}
-      if ((index == selected)); then
-        printf '\033[1;7m%-*s\033[0m |\n' "$list_width" "$label"
-      else
-        printf '%-*s |\n' "$list_width" "$label"
-      fi
-      index=$((index + 1))
-    done
-    printf '\033[2;%sH' "$((list_width + 3))"
-    if ! chafa --animate on --duration 0 \
+    if ! chafa --animate on --duration 0 --align top,left \
       --size "${image_width}x${image_height}" "${paths[$selected]}"; then
       printf '\033[%s;1H\n' "$rows"
       return 1
     fi
+    printf '\033[1;%sHsequence %s %s/%s' "$((image_width + 2))" \
+      "$sequence_id" "$((selected + 1))" "$total"
+    printf '\033[2;%sHartist %s' "$((image_width + 2))" \
+      "${artists[$selected]}"
+    printf '\033[3;%sHtags %s' "$((image_width + 2))" \
+      "${tag_values[$selected]}"
+    index=$start
+    while ((index < end)); do
+      label=$(printf '%s %s' "$((index + 1))" "${artists[$index]}")
+      label=${label:0:$((list_width - 1))}
+      printf '\033[%s;%sH' "$((index - start + 5))" "$((image_width + 2))"
+      if ((index == selected)); then
+        printf '\033[1;7m%s\033[0m' "$label"
+      else
+        printf '%s' "$label"
+      fi
+      index=$((index + 1))
+    done
     printf '\033[%s;1H' "$rows"
-    [ -z "$message" ] || printf '%s  ' "$message"
-    printf '↑/↓  [a] tag  [r] untag  [x] remove image  '
-    printf '[d] delete  [q] back: '
+    [ -z "$message" ] || printf '%s ' "$message"
+    printf '↑/↓ [a]tag [r]untag [x]remove [d]delete [q]back: '
     key=$(display_read_key)
     message=
     case "$key" in
@@ -297,12 +308,12 @@ display_previews() {
   help=$(chafa --help 2>&1)
   case "$help" in
     *--grid*)
-      chafa --grid "$grid" --label on --link off \
+      chafa --grid "$grid" --label on --link off --align top,left \
         --animate on --duration 0 "$@"
       ;;
     *)
       for path in "$@"; do
-        chafa --size 32x16 "$path"
+        chafa --size 32x16 --align top,left "$path"
       done
       ;;
   esac
@@ -421,7 +432,8 @@ display_pager() {
     fi
     redraw=1
     printf '[%s/%s] ' "$((page + 1))" "$pages"
-    [ -z "$message" ] || printf '%s  ' "$message"
+    [ -z "$message" ] || printf '%s ' "$message"
+    printf '←/→ number [q]quit: '
     key=$(display_read_key)
     if case "$key" in [0-9]) true ;; *) false ;; esac; then
       IFS= read -r rest </dev/tty

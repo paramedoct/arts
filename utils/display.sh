@@ -41,13 +41,13 @@ display_auto_layout() {
 display_read_key() {
   local key
   local rest
-  IFS= read -r -n 1 key </dev/tty
+  IFS= read -r -s -n 1 key </dev/tty
   if [ "$key" = $'\033' ]; then
     rest=
-    if IFS= read -r -t 0.1 -n 1 rest </dev/tty && [ "$rest" = '[' ]; then
+    if IFS= read -r -s -t 0.1 -n 1 rest </dev/tty && [ "$rest" = '[' ]; then
       key=$key$rest
       rest=
-      if IFS= read -r -t 0.1 -n 1 rest </dev/tty; then
+      if IFS= read -r -s -t 0.1 -n 1 rest </dev/tty; then
         key=$key$rest
       fi
     fi
@@ -408,7 +408,6 @@ display_pager() {
   local end
   local position
   local target
-  local message
   local redraw
   limit=$1
   shift
@@ -422,7 +421,6 @@ display_pager() {
   page=${DISPLAY_PAGE:-0}
   if ((page >= pages)); then page=$((pages - 1)); fi
   if ((page < 0)); then page=0; fi
-  message=
   redraw=1
   while :; do
     DISPLAY_PAGE=$page
@@ -436,25 +434,18 @@ display_pager() {
       fi
     fi
     redraw=1
-    printf '[%s/%s] ' "$((page + 1))" "$pages"
-    [ -z "$message" ] || printf '%s ' "$message"
-    printf '←/→ [0-9] [q]quit: '
+    printf '[%s/%s]' "$((page + 1))" "$pages"
     key=$(display_read_key)
     printf '\n'
-    message=
     case "$key" in
       $'\033[D')
         if ((page > 0)); then
           page=$((page - 1))
-        else
-          message='first page'
         fi
         ;;
       $'\033[C')
         if ((page + 1 < pages)); then
           page=$((page + 1))
-        else
-          message='last page'
         fi
         ;;
       q | Q | $'\033') return 0 ;;
@@ -481,8 +472,6 @@ display_pager() {
             return 10
           fi
           return "$rest"
-        else
-          message="selection is not on this page: $key"
         fi
         ;;
     esac

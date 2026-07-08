@@ -308,12 +308,12 @@ display_previews() {
   help=$(chafa --help 2>&1)
   case "$help" in
     *--grid*)
-      chafa --grid "$grid" --label on --link off --align top,left \
+      chafa --grid "$grid" --label on --link off --align bottom,center \
         --animate on --duration 0 "$@"
       ;;
     *)
       for path in "$@"; do
-        chafa --size 32x16 --align top,left "$path"
+        chafa --size 32x16 --align bottom,center "$path"
       done
       ;;
   esac

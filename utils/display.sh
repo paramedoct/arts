@@ -110,6 +110,8 @@ display_image() {
 
 display_image_browser() {
   local id
+  local rows
+  local cols
   local key
   local message
   id=$1
@@ -118,9 +120,13 @@ display_image_browser() {
     printf '\033[2J\033[H'
     display_image "$id"
     [ -z "$message" ] || printf '%s\n' "$message"
-    printf '[1/1]'
+    rows=24
+    cols=80
+    read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
+    if ((rows < 10)); then rows=10; fi
+    printf '\033[%s;1H\033[2K[1/1]' "$rows"
     key=$(display_read_key)
-    printf '\n'
+    printf '\033[%s;1H\033[2K' "$rows"
     message=
     case "$key" in
       a | A)
@@ -208,9 +214,9 @@ display_sequence_browser() {
     printf 'artist %s\n' "${artists[$selected]}"
     printf 'tags %s\n' "${tag_values[$selected]}"
     [ -z "$message" ] || printf '%s\n' "$message"
-    printf '[%s/%s]' "$((selected + 1))" "$total"
+    printf '\033[%s;1H\033[2K[%s/%s]' "$rows" "$((selected + 1))" "$total"
     key=$(display_read_key)
-    printf '\n'
+    printf '\033[%s;1H\033[2K' "$rows"
     message=
     case "$key" in
       $'\033[A' | $'\033[D')
@@ -373,6 +379,8 @@ display_pager() {
   local page
   local key
   local rest
+  local rows
+  local cols
   local selected
   local start
   local end
@@ -411,9 +419,13 @@ display_pager() {
       fi
     fi
     redraw=1
-    printf '[%s/%s]' "$((page + 1))" "$pages"
+    rows=24
+    cols=80
+    read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
+    if ((rows < 10)); then rows=10; fi
+    printf '\033[%s;1H\033[2K[%s/%s]' "$rows" "$((page + 1))" "$pages"
     key=$(display_read_key)
-    printf '\n'
+    printf '\033[%s;1H\033[2K' "$rows"
     case "$key" in
       $'\033[A' | $'\033[D')
         if ((page > 0)); then
@@ -431,7 +443,6 @@ display_pager() {
         ;;
       '') ;;
       *[!0-9]* | ??*)
-        printf '\033[1A\r\033[2K'
         redraw=0
         ;;
       *)

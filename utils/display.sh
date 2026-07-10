@@ -18,8 +18,10 @@ display_auto_layout() {
   local grid_rows
   local required
   local limit
+  local min_preview_rows
   rows=24
   cols=80
+  min_preview_rows=10
   read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
   case "$rows:$cols" in
     *[!0-9:]* | 0:* | *:0) rows=24; cols=80 ;;
@@ -30,7 +32,7 @@ display_auto_layout() {
   grid_rows=1
   limit=$grid_cols
   while ((grid_rows <= 2)); do
-    required=$((4 + grid_rows * 16))
+    required=$((2 + grid_rows * min_preview_rows))
     if ((required > rows)); then break; fi
     limit=$((grid_cols * grid_rows))
     grid_rows=$((grid_rows + 1))

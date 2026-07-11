@@ -146,7 +146,6 @@ display_image_browser() {
   local rows
   local cols
   local key
-  local message
   local record
   local info
   local sha
@@ -165,7 +164,6 @@ display_image_browser() {
     echo "stored image not found: $path" >&2
     return 1
   fi
-  message=
   while :; do
     rows=24
     cols=80
@@ -175,14 +173,17 @@ display_image_browser() {
     printf '\033[2J\033[H'
     display_metadata "$rows" "$artist" "$album" "$character" \
       "${mime#image/}" "$sha"
-    [ -z "$message" ] || printf '\033[%s;1H%s' "$((rows - 1))" "$message"
     printf '\033[%s;1H\033[2K[1/1]' "$rows"
     printf '\033[H'
     display_image_start "$path" "$rows" "$cols"
-    key=$(display_read_key)
+    while :; do
+      key=$(display_read_key)
+      case "$key" in
+        d | D | b | B | q | Q | $'\033') break ;;
+      esac
+    done
     display_image_stop
     printf '\033[%s;1H\033[2K' "$rows"
-    message=
     case "$key" in
       d | D)
         if action_remove "$id"; then return 10; fi
@@ -190,7 +191,6 @@ display_image_browser() {
       b | B | q | Q | $'\033')
         return 0
         ;;
-      *) message="unknown key: $key" ;;
     esac
   done
 }
@@ -211,7 +211,6 @@ display_sequence_browser() {
   local album
   local character
   local key
-  local message
   local path
   local -a ids
   local -a paths
@@ -253,7 +252,6 @@ display_sequence_browser() {
   done
   selected=0
   shown_selected=-1
-  message=
   while :; do
     rows=24
     cols=80
@@ -268,32 +266,33 @@ display_sequence_browser() {
     display_metadata "$rows" "${artists[$selected]}" \
       "${albums[$selected]}" "${characters[$selected]}" \
       "${mimes[$selected]}" "${shas[$selected]}"
-    [ -z "$message" ] || printf '\033[%s;1H%s' "$((rows - 1))" "$message"
     printf '\033[%s;1H\033[2K[%s/%s]' "$rows" "$((selected + 1))" "$total"
     printf '\033[H'
     display_image_start "${paths[$selected]}" "$rows" "$cols"
-    key=$(display_read_key)
+    while :; do
+      key=$(display_read_key)
+      case "$key" in
+        $'\033[A' | $'\033[D')
+          ((selected > 0)) && break
+          ;;
+        $'\033[B' | $'\033[C')
+          ((selected + 1 < total)) && break
+          ;;
+        x | X | d | D | b | B | q | Q | $'\033') break ;;
+      esac
+    done
     if ! display_image_stop; then
       printf '\033[%s;1H\n' "$rows"
       return 1
     fi
     shown_selected=$selected
     printf '\033[%s;1H\033[2K' "$rows"
-    message=
     case "$key" in
       $'\033[A' | $'\033[D')
-        if ((selected > 0)); then
-          selected=$((selected - 1))
-        else
-          message='first image'
-        fi
+        selected=$((selected - 1))
         ;;
       $'\033[B' | $'\033[C')
-        if ((selected + 1 < total)); then
-          selected=$((selected + 1))
-        else
-          message='last image'
-        fi
+        selected=$((selected + 1))
         ;;
       x | X)
         if action_sequence_image_remove "$sequence_id" "${ids[$selected]}" \
@@ -308,7 +307,6 @@ display_sequence_browser() {
         printf '\033[2J\033[H'
         return 0
         ;;
-      *) message="unknown key: $key" ;;
     esac
   done
 }

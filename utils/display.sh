@@ -408,7 +408,7 @@ display_pager() {
     DISPLAY_PAGE=$page
     if [ "$redraw" -eq 1 ]; then
       if [ -t 0 ] && [ -t 1 ]; then
-        if ((shown_page >= 0 && shown_page != page)); then
+        if ((shown_page < 0 || shown_page != page)); then
           display_clear_history
         else
           printf '\033[2J\033[H'

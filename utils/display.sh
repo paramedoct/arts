@@ -108,6 +108,7 @@ display_image() {
   chafa --align top,left --size "${cols}x$((rows - 5))" "$path"
   printf 'artist %s\n' "$artist"
   printf 'tags %s\n' "$tags"
+  printf 'sha256 %s\n' "$sha"
 }
 
 display_image_browser() {
@@ -168,6 +169,7 @@ display_sequence_browser() {
   local -a paths
   local -a artists
   local -a tag_values
+  local -a shas
   sequence_id=$1
   shift
   ids=("$@")
@@ -179,6 +181,7 @@ display_sequence_browser() {
   paths=()
   artists=()
   tag_values=()
+  shas=()
   for id in "${ids[@]}"; do
     record=$(image_file_require "$id")
     IFS=$'\t' read -r _ sha artist _ <<<"$record"
@@ -192,6 +195,7 @@ display_sequence_browser() {
     paths+=("$path")
     artists+=("$artist")
     tag_values+=("$tags")
+    shas+=("$sha")
   done
   selected=0
   shown_selected=-1
@@ -215,6 +219,7 @@ display_sequence_browser() {
     shown_selected=$selected
     printf 'artist %s\n' "${artists[$selected]}"
     printf 'tags %s\n' "${tag_values[$selected]}"
+    printf 'sha256 %s\n' "${shas[$selected]}"
     [ -z "$message" ] || printf '%s\n' "$message"
     printf '\033[%s;1H\033[2K[%s/%s]' "$rows" "$((selected + 1))" "$total"
     key=$(display_read_key)

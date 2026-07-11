@@ -5,4 +5,7 @@ profile_prepare() {
   ARTS_DB_FILE=$ARTS_STATE_DIR/arts.db
   mkdir -p "$ARTS_IMAGES_DIR" "$ARTS_STATE_DIR"
   db_init
+  ARTS_DISPLAY_FORMAT=$(db_value "
+SELECT display_format FROM settings WHERE id = 1;
+")
 }

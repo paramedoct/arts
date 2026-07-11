@@ -75,18 +75,66 @@ WHERE objects.id = $id;
 "
 }
 
-display_image() {
-  local id
-  local record
-  local sha
-  local artist
-  local mime
-  local info
-  local album
-  local character
+display_image_start() {
   local path
   local rows
   local cols
+  path=$1
+  rows=$2
+  cols=$3
+  chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --animate on \
+    --align top,left --size "${cols}x$((rows - 7))" "$path" &
+  DISPLAY_IMAGE_PID=$!
+}
+
+display_image_stop() {
+  local status
+  status=0
+  if kill -0 "$DISPLAY_IMAGE_PID" 2>/dev/null; then
+    kill "$DISPLAY_IMAGE_PID" 2>/dev/null || true
+  fi
+  wait "$DISPLAY_IMAGE_PID" 2>/dev/null || status=$?
+  DISPLAY_IMAGE_PID=
+  [ "$status" -eq 0 ] || [ "$status" -eq 143 ]
+}
+
+display_metadata() {
+  local rows
+  local artist
+  local album
+  local character
+  local mime
+  local sha
+  rows=$1
+  artist=$2
+  album=$3
+  character=$4
+  mime=$5
+  sha=$6
+  printf '\033[%s;1H' "$((rows - 6))"
+  pair_reset
+  pair_add artist "$artist"
+  pair_add album "$album"
+  pair_add character "$character"
+  pair_add mime "$mime"
+  pair_add sha256 "$sha"
+  pair_print
+}
+
+display_image_browser() {
+  local id
+  local rows
+  local cols
+  local key
+  local message
+  local record
+  local info
+  local sha
+  local artist
+  local mime
+  local album
+  local character
+  local path
   id=$1
   record=$(image_require "$id")
   IFS=$'\t' read -r _ sha artist mime _ <<<"$record"
@@ -97,37 +145,22 @@ display_image() {
     echo "stored image not found: $path" >&2
     return 1
   fi
-  rows=24
-  cols=80
-  read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
-  if ((rows < 10)); then rows=10; fi
-  if ((cols < 20)); then cols=20; fi
-  chafa --align top,left --size "${cols}x$((rows - 7))" "$path"
-  printf 'artist %s\n' "$artist"
-  printf 'album %s\n' "$album"
-  printf 'character %s\n' "$character"
-  printf 'mime %s\n' "${mime#image/}"
-  printf 'sha256 %s\n' "$sha"
-}
-
-display_image_browser() {
-  local id
-  local rows
-  local cols
-  local key
-  local message
-  id=$1
   message=
   while :; do
-    printf '\033[2J\033[H'
-    display_image "$id"
-    [ -z "$message" ] || printf '%s\n' "$message"
     rows=24
     cols=80
     read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
     if ((rows < 10)); then rows=10; fi
+    if ((cols < 20)); then cols=20; fi
+    printf '\033[2J\033[H'
+    display_metadata "$rows" "$artist" "$album" "$character" \
+      "${mime#image/}" "$sha"
+    [ -z "$message" ] || printf '\033[%s;1H%s' "$((rows - 1))" "$message"
     printf '\033[%s;1H\033[2K[1/1]' "$rows"
+    printf '\033[H'
+    display_image_start "$path" "$rows" "$cols"
     key=$(display_read_key)
+    display_image_stop
     printf '\033[%s;1H\033[2K' "$rows"
     message=
     case "$key" in
@@ -212,20 +245,19 @@ display_sequence_browser() {
     else
       printf '\033[2J\033[H'
     fi
-    if ! chafa --animate on --duration 0 --align top,left \
-      --size "${cols}x$((rows - 7))" "${paths[$selected]}"; then
+    display_metadata "$rows" "${artists[$selected]}" \
+      "${albums[$selected]}" "${characters[$selected]}" \
+      "${mimes[$selected]}" "${shas[$selected]}"
+    [ -z "$message" ] || printf '\033[%s;1H%s' "$((rows - 1))" "$message"
+    printf '\033[%s;1H\033[2K[%s/%s]' "$rows" "$((selected + 1))" "$total"
+    printf '\033[H'
+    display_image_start "${paths[$selected]}" "$rows" "$cols"
+    key=$(display_read_key)
+    if ! display_image_stop; then
       printf '\033[%s;1H\n' "$rows"
       return 1
     fi
     shown_selected=$selected
-    printf 'artist %s\n' "${artists[$selected]}"
-    printf 'album %s\n' "${albums[$selected]}"
-    printf 'character %s\n' "${characters[$selected]}"
-    printf 'mime %s\n' "${mimes[$selected]}"
-    printf 'sha256 %s\n' "${shas[$selected]}"
-    [ -z "$message" ] || printf '%s\n' "$message"
-    printf '\033[%s;1H\033[2K[%s/%s]' "$rows" "$((selected + 1))" "$total"
-    key=$(display_read_key)
     printf '\033[%s;1H\033[2K' "$rows"
     message=
     case "$key" in
@@ -293,12 +325,13 @@ display_previews() {
   help=$(chafa --help 2>&1)
   case "$help" in
     *--grid*)
-      chafa --grid "$grid" --label on --link off --align bottom,center \
-        --animate on --duration 0 "$@"
+      chafa --format "$ARTS_DISPLAY_FORMAT" --grid "$grid" --label on \
+        --link off --align bottom,center --animate on --duration 0 "$@"
       ;;
     *)
       for path in "$@"; do
-        chafa --size 32x16 --align bottom,center "$path"
+        chafa --format "$ARTS_DISPLAY_FORMAT" --size 32x16 \
+          --align bottom,center "$path"
       done
       ;;
   esac

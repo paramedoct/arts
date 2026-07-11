@@ -18,6 +18,7 @@ source_modules \
   utils/sequence.sh \
   utils/search.sh \
   utils/action.sh \
+  utils/pair.sh \
   utils/display.sh
 
 main() {

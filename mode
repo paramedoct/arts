@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  echo "$0 [iterm|kitty|sixels|symbols]" >&2
+  exit 1
+}
+
+# shellcheck source=/dev/null
+source "$ROOT_DIR/utils/source.sh"
+source_modules \
+  utils/db.sh \
+  utils/profile.sh
+
+main() {
+  local format
+  [ "$#" -le 1 ] || usage
+  profile_prepare
+  if [ "$#" -eq 0 ]; then
+    printf '%s\n' "$ARTS_DISPLAY_FORMAT"
+    return 0
+  fi
+  format=$1
+  case "$format" in
+    iterm | kitty | sixels | symbols) ;;
+    *) usage ;;
+  esac
+  db_run "
+UPDATE settings SET display_format = $(db_quote "$format") WHERE id = 1;
+"
+  printf '%s\n' "$format"
+}
+
+main "$@"

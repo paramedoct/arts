@@ -86,6 +86,7 @@ image_require() {
 image_add() {
   local artist
   local album
+  local character
   local file
   local sha
   local existing_id
@@ -93,6 +94,9 @@ image_add() {
   local size
   local artist_sql
   local album_sql
+  local character_sql
+  local character_id_sql
+  local character_statement
   local mime_sql
   local target_dir
   local target
@@ -100,9 +104,11 @@ image_add() {
   local id
   artist=$1
   album=$2
-  file=$3
+  character=$3
+  file=$4
   image_validate_artist "$artist"
   album_validate "$album"
+  if [ -n "$character" ]; then character_validate "$character"; fi
   if [ ! -f "$file" ] || [ ! -r "$file" ]; then
     echo "image is not a readable file: $file" >&2
     return 1
@@ -126,6 +132,14 @@ SELECT object_id FROM images WHERE sha256 = $(db_quote "$sha");
   size=$(wc -c <"$file" | tr -d '[:space:]')
   artist_sql=$(db_quote "$artist")
   album_sql=$(db_quote "$album")
+  character_sql=$(db_quote "$character")
+  character_id_sql=NULL
+  character_statement=
+  if [ -n "$character" ]; then
+    character_id_sql="(SELECT id FROM characters WHERE name = $character_sql)"
+    character_statement="INSERT OR IGNORE INTO characters (name)
+VALUES ($character_sql);"
+  fi
   mime_sql=$(db_quote "$mime")
   target_dir=$ARTS_IMAGES_DIR/$artist
   target=$(image_path "$artist" "$sha")
@@ -146,8 +160,9 @@ BEGIN IMMEDIATE;
 INSERT OR IGNORE INTO artists (name) VALUES ($artist_sql);
 INSERT OR IGNORE INTO albums (artist_id, name)
 SELECT id, $album_sql FROM artists WHERE name = $artist_sql;
-INSERT INTO objects (type, artist_id, album_id)
-SELECT 'image', artists.id, albums.id
+$character_statement
+INSERT INTO objects (type, artist_id, album_id, character_id)
+SELECT 'image', artists.id, albums.id, $character_id_sql
 FROM artists
 JOIN albums ON albums.artist_id = artists.id
 WHERE artists.name = $artist_sql AND albums.name = $album_sql;
@@ -178,6 +193,9 @@ BEGIN IMMEDIATE;
 DELETE FROM images
 WHERE object_id = $id;
 DELETE FROM objects WHERE id = $id;
+DELETE FROM characters WHERE NOT EXISTS (
+  SELECT 1 FROM objects WHERE objects.character_id = characters.id
+);
 DELETE FROM albums WHERE NOT EXISTS (
   SELECT 1 FROM objects WHERE objects.album_id = albums.id
 );

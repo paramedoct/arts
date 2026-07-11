@@ -13,14 +13,18 @@ sequence_add() {
   local image_id
   local artist_id
   local album_id
+  local character_id
   local current_artist_id
   local current_album_id
+  local current_character_id
   [ "$#" -ge 1 ] || {
     echo "sequence requires at least one image" >&2
     return 1
   }
   artist_id=$(db_value "SELECT artist_id FROM objects WHERE id = $1;")
   album_id=$(db_value "SELECT album_id FROM objects WHERE id = $1;")
+  character_id=$(db_value \
+    "SELECT COALESCE(character_id, '') FROM objects WHERE id = $1;")
   [ -n "$artist_id" ] || {
     echo "image not found: $1" >&2
     return 1
@@ -28,8 +32,8 @@ sequence_add() {
   statements="
 PRAGMA foreign_keys = ON;
 BEGIN IMMEDIATE;
-INSERT INTO objects (type, artist_id, album_id)
-VALUES ('sequence', $artist_id, $album_id);"
+INSERT INTO objects (type, artist_id, album_id, character_id)
+VALUES ('sequence', $artist_id, $album_id, ${character_id:-NULL});"
   position=1
   for image_id in "$@"; do
     image_require "$image_id" >/dev/null
@@ -37,12 +41,18 @@ VALUES ('sequence', $artist_id, $album_id);"
       "SELECT artist_id FROM objects WHERE id = $image_id;")
     current_album_id=$(db_value \
       "SELECT album_id FROM objects WHERE id = $image_id;")
+    current_character_id=$(db_value \
+      "SELECT COALESCE(character_id, '') FROM objects WHERE id = $image_id;")
     if [ "$current_artist_id" != "$artist_id" ]; then
       echo "sequence images must have the same artist" >&2
       return 1
     fi
     if [ "$current_album_id" != "$album_id" ]; then
       echo "sequence images must have the same album" >&2
+      return 1
+    fi
+    if [ "$current_character_id" != "$character_id" ]; then
+      echo "sequence images must have the same character" >&2
       return 1
     fi
     statements="$statements
@@ -75,6 +85,9 @@ WHERE objects.id = $id ORDER BY images.position;
   db_run "
 BEGIN IMMEDIATE;
 DELETE FROM objects WHERE id = $id;
+DELETE FROM characters WHERE NOT EXISTS (
+  SELECT 1 FROM objects WHERE objects.character_id = characters.id
+);
 DELETE FROM albums WHERE NOT EXISTS (
   SELECT 1 FROM objects WHERE objects.album_id = albums.id
 );

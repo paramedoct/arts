@@ -65,10 +65,12 @@ display_info() {
   local id
   id=$1
   db_value "
-SELECT objects.id || char(9) || artists.name || char(9) || albums.name
+SELECT objects.id || char(9) || artists.name || char(9) || albums.name ||
+       char(9) || COALESCE(characters.name, '-')
 FROM objects
 JOIN artists ON artists.id = objects.artist_id
 JOIN albums ON albums.id = objects.album_id
+LEFT JOIN characters ON characters.id = objects.character_id
 WHERE objects.id = $id;
 "
 }
@@ -80,6 +82,7 @@ display_image() {
   local artist
   local info
   local album
+  local character
   local path
   local rows
   local cols
@@ -87,7 +90,7 @@ display_image() {
   record=$(image_require "$id")
   IFS=$'\t' read -r _ sha artist _ <<<"$record"
   info=$(display_info "$id")
-  IFS=$'\t' read -r _ artist album <<<"$info"
+  IFS=$'\t' read -r _ artist album character <<<"$info"
   path=$(image_path "$artist" "$sha")
   if [ ! -r "$path" ]; then
     echo "stored image not found: $path" >&2
@@ -98,9 +101,10 @@ display_image() {
   read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
   if ((rows < 10)); then rows=10; fi
   if ((cols < 20)); then cols=20; fi
-  chafa --align top,left --size "${cols}x$((rows - 5))" "$path"
+  chafa --align top,left --size "${cols}x$((rows - 6))" "$path"
   printf 'artist %s\n' "$artist"
   printf 'album %s\n' "$album"
+  printf 'character %s\n' "$character"
   printf 'sha256 %s\n' "$sha"
 }
 
@@ -149,6 +153,7 @@ display_sequence_browser() {
   local sha
   local artist
   local album
+  local character
   local key
   local message
   local path
@@ -156,6 +161,7 @@ display_sequence_browser() {
   local -a paths
   local -a artists
   local -a albums
+  local -a characters
   local -a shas
   sequence_id=$1
   shift
@@ -168,12 +174,13 @@ display_sequence_browser() {
   paths=()
   artists=()
   albums=()
+  characters=()
   shas=()
   for id in "${ids[@]}"; do
     record=$(image_file_require "$id")
     IFS=$'\t' read -r _ sha artist _ <<<"$record"
     info=$(display_info "$sequence_id")
-    IFS=$'\t' read -r _ artist album <<<"$info"
+    IFS=$'\t' read -r _ artist album character <<<"$info"
     path=$(image_path "$artist" "$sha")
     if [ ! -r "$path" ]; then
       echo "stored image not found: $path" >&2
@@ -182,6 +189,7 @@ display_sequence_browser() {
     paths+=("$path")
     artists+=("$artist")
     albums+=("$album")
+    characters+=("$character")
     shas+=("$sha")
   done
   selected=0
@@ -199,13 +207,14 @@ display_sequence_browser() {
       printf '\033[2J\033[H'
     fi
     if ! chafa --animate on --duration 0 --align top,left \
-      --size "${cols}x$((rows - 5))" "${paths[$selected]}"; then
+      --size "${cols}x$((rows - 6))" "${paths[$selected]}"; then
       printf '\033[%s;1H\n' "$rows"
       return 1
     fi
     shown_selected=$selected
     printf 'artist %s\n' "${artists[$selected]}"
     printf 'album %s\n' "${albums[$selected]}"
+    printf 'character %s\n' "${characters[$selected]}"
     printf 'sha256 %s\n' "${shas[$selected]}"
     [ -z "$message" ] || printf '%s\n' "$message"
     printf '\033[%s;1H\033[2K[%s/%s]' "$rows" "$((selected + 1))" "$total"

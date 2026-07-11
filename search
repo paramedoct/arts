@@ -76,6 +76,10 @@ main() {
     DISPLAY_GRID_COLS=$(((limit + 1) / 2))
   fi
   profile_prepare
+  if [ -t 0 ] && [ -t 1 ]; then
+    display_cursor_hide
+    trap display_cursor_show EXIT
+  fi
   DISPLAY_PAGE=0
   while :; do
     result_targets=()

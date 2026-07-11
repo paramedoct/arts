@@ -44,6 +44,14 @@ display_clear_history() {
   printf '\033[H\033[2J\033[3J'
 }
 
+display_cursor_hide() {
+  printf '\033[?25l'
+}
+
+display_cursor_show() {
+  printf '\033[?25h'
+}
+
 display_read_key() {
   local key
   local rest
@@ -82,8 +90,20 @@ display_image_start() {
   path=$1
   rows=$2
   cols=$3
-  chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --animate on \
-    --align top,left --size "${cols}x$((rows - 7))" "$path" &
+  (
+    local image_pid
+    trap '
+      kill "$image_pid" 2>/dev/null || true
+      wait "$image_pid" 2>/dev/null || true
+      display_cursor_hide
+      exit 143
+    ' TERM
+    chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --animate on \
+      --align top,left --size "${cols}x$((rows - 7))" "$path" &
+    image_pid=$!
+    wait "$image_pid"
+    display_cursor_hide
+  ) &
   DISPLAY_IMAGE_PID=$!
 }
 

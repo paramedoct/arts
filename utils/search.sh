@@ -20,20 +20,20 @@ search_targets() {
         album=${rest%%:*}
         character=${rest#*:}
         character_validate "$character" || return 1
-        where="characters.name = $(db_quote "$character")"
+        where="topics.name = $(db_quote "$character")"
         if [ -n "$artist" ]; then
           image_validate_artist "$artist" || return 1
           where="$where AND artists.name = $(db_quote "$artist")"
         fi
         if [ -n "$album" ]; then
           album_validate "$album" || return 1
-          where="$where AND albums.name = $(db_quote "$album")"
+          where="$where AND cats.name = $(db_quote "$album")"
         fi
         ;;
       :*)
         album=${location#:}
         album_validate "$album" || return 1
-        where="albums.name = $(db_quote "$album")"
+        where="cats.name = $(db_quote "$album")"
         ;;
       *:*)
         artist=${location%%:*}
@@ -41,7 +41,7 @@ search_targets() {
         image_validate_artist "$artist" || return 1
         album_validate "$album" || return 1
         where="artists.name = $(db_quote "$artist")
-  AND albums.name = $(db_quote "$album")"
+  AND cats.name = $(db_quote "$album")"
         ;;
       *)
         image_validate_artist "$location" || return 1
@@ -54,8 +54,8 @@ SELECT objects.id
 FROM objects
 JOIN images ON images.object_id = objects.id
 JOIN artists ON artists.id = objects.artist_id
-JOIN albums ON albums.id = objects.album_id
-LEFT JOIN characters ON characters.id = objects.character_id
+JOIN cats ON cats.id = objects.cat_id
+LEFT JOIN topics ON topics.id = objects.topic_id
 WHERE $where
 GROUP BY objects.id
 ORDER BY min(images.id), objects.id;

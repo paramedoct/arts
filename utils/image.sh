@@ -136,8 +136,8 @@ SELECT object_id FROM images WHERE sha256 = $(db_quote "$sha");
   character_id_sql=NULL
   character_statement=
   if [ -n "$character" ]; then
-    character_id_sql="(SELECT id FROM characters WHERE name = $character_sql)"
-    character_statement="INSERT OR IGNORE INTO characters (name)
+    character_id_sql="(SELECT id FROM topics WHERE name = $character_sql)"
+    character_statement="INSERT OR IGNORE INTO topics (name)
 VALUES ($character_sql);"
   fi
   mime_sql=$(db_quote "$mime")
@@ -158,14 +158,14 @@ VALUES ($character_sql);"
 PRAGMA foreign_keys = ON;
 BEGIN IMMEDIATE;
 INSERT OR IGNORE INTO artists (name) VALUES ($artist_sql);
-INSERT OR IGNORE INTO albums (artist_id, name)
+INSERT OR IGNORE INTO cats (artist_id, name)
 SELECT id, $album_sql FROM artists WHERE name = $artist_sql;
 $character_statement
-INSERT INTO objects (type, artist_id, album_id, character_id)
-SELECT 'image', artists.id, albums.id, $character_id_sql
+INSERT INTO objects (type, artist_id, cat_id, topic_id)
+SELECT 'image', artists.id, cats.id, $character_id_sql
 FROM artists
-JOIN albums ON albums.artist_id = artists.id
-WHERE artists.name = $artist_sql AND albums.name = $album_sql;
+JOIN cats ON cats.artist_id = artists.id
+WHERE artists.name = $artist_sql AND cats.name = $album_sql;
 INSERT INTO images (object_id, position, sha256, mime_type, byte_size)
 SELECT (SELECT max(id) FROM objects), 1, $(db_quote "$sha"), $mime_sql, $size
 FROM artists WHERE name = $artist_sql;
@@ -193,11 +193,11 @@ BEGIN IMMEDIATE;
 DELETE FROM images
 WHERE object_id = $id;
 DELETE FROM objects WHERE id = $id;
-DELETE FROM characters WHERE NOT EXISTS (
-  SELECT 1 FROM objects WHERE objects.character_id = characters.id
+DELETE FROM topics WHERE NOT EXISTS (
+  SELECT 1 FROM objects WHERE objects.topic_id = topics.id
 );
-DELETE FROM albums WHERE NOT EXISTS (
-  SELECT 1 FROM objects WHERE objects.album_id = albums.id
+DELETE FROM cats WHERE NOT EXISTS (
+  SELECT 1 FROM objects WHERE objects.cat_id = cats.id
 );
 DELETE FROM artists WHERE NOT EXISTS (
   SELECT 1 FROM objects WHERE objects.artist_id = artists.id

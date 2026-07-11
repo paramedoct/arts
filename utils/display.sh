@@ -73,12 +73,12 @@ display_info() {
   local id
   id=$1
   db_value "
-SELECT objects.id || char(9) || artists.name || char(9) || albums.name ||
-       char(9) || COALESCE(characters.name, '-')
+SELECT objects.id || char(9) || artists.name || char(9) || cats.name ||
+       char(9) || COALESCE(topics.name, '-')
 FROM objects
 JOIN artists ON artists.id = objects.artist_id
-JOIN albums ON albums.id = objects.album_id
-LEFT JOIN characters ON characters.id = objects.character_id
+JOIN cats ON cats.id = objects.cat_id
+LEFT JOIN topics ON topics.id = objects.topic_id
 WHERE objects.id = $id;
 "
 }

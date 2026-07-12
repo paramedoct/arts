@@ -350,15 +350,30 @@ display_target() {
 
 display_previews() {
   local grid
+  local grid_rows
   local help
   local path
+  local view_cols
+  local view_rows
   grid=${DISPLAY_GRID_COLS:-auto}
   help=$(chafa --help 2>&1)
   case "$help" in
     *--grid*)
-      chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --grid "$grid" \
-        --relative on --label on --link off --align bottom,center \
-        --animate on --duration 0 "$@"
+      case "$grid" in
+        '' | *[!0-9]*)
+          chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --grid "$grid" \
+            --relative on --label on --link off --align bottom,center \
+            --animate on --duration 0 "$@"
+          ;;
+        *)
+          grid_rows=$((($# + grid - 1) / grid))
+          view_cols=$((grid * 20))
+          view_rows=$((grid_rows * 10))
+          chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --grid "$grid" \
+            --view-size "${view_cols}x${view_rows}" --relative on --label on \
+            --link off --align bottom,center --animate on --duration 0 "$@"
+          ;;
+      esac
       ;;
     *)
       for path in "$@"; do

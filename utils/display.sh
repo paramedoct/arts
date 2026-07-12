@@ -352,17 +352,28 @@ display_previews() {
   local grid
   local help
   local path
+  local rows
+  local cols
   grid=${DISPLAY_GRID_COLS:-auto}
+  rows=24
+  cols=80
+  if [ -t 0 ] && [ -t 1 ]; then
+    read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
+  fi
+  case "$rows:$cols" in
+    *[!0-9:]* | 0:* | *:0) rows=24; cols=80 ;;
+  esac
   help=$(chafa --help 2>&1)
   case "$help" in
     *--grid*)
-      chafa --format "$ARTS_DISPLAY_FORMAT" --grid "$grid" --label on \
+      chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --grid "$grid" \
+        --view-size "${cols}x$((rows - 1))" --margin-bottom 1 --label on \
         --link off --align bottom,center --animate on --duration 0 "$@"
       ;;
     *)
       for path in "$@"; do
-        chafa --format "$ARTS_DISPLAY_FORMAT" --size 32x16 \
-          --align bottom,center "$path"
+        chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --size 32x16 \
+          --view-size "${cols}x$((rows - 1))" --align bottom,center "$path"
       done
       ;;
   esac

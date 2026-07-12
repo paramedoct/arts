@@ -499,18 +499,22 @@ display_pager() {
       $'\033[A' | $'\033[D')
         if ((page > 0)); then
           page=$((page - 1))
+        else
+          redraw=0
         fi
         ;;
       $'\033[B' | $'\033[C')
         if ((page + 1 < pages)); then
           page=$((page + 1))
+        else
+          redraw=0
         fi
         ;;
       q | Q | $'\033')
         display_clear_history
         return 0
         ;;
-      '') ;;
+      '') redraw=0 ;;
       *[!0-9]* | ??*)
         redraw=0
         ;;
@@ -541,6 +545,8 @@ display_pager() {
             return 10
           fi
           return "$rest"
+        else
+          redraw=0
         fi
         ;;
     esac

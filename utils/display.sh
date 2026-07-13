@@ -96,17 +96,20 @@ display_metadata() {
   local album
   local character
   local sha
+  local sequence
   rows=$1
   artist=$2
   album=$3
   character=$4
   sha=$5
+  sequence=${6:-}
   printf '\033[%s;1H' "$((rows - 6))"
   pair_reset
   pair_add artist "$artist"
   pair_add cat "$album"
   pair_add topic "$character"
   pair_add sha256 "$sha"
+  if [ -n "$sequence" ]; then pair_add position "$sequence"; fi
   pair_print
 }
 
@@ -131,6 +134,7 @@ display_browser() {
   local key
   local path
   local pager
+  local sequence
   local position
   local -a image_ids
   total=$#
@@ -180,9 +184,13 @@ ORDER BY images.position;
     if ((rows < 10)); then rows=10; fi
     if ((cols < 20)); then cols=20; fi
     display_clear_history
-    display_metadata "$rows" "$artist" "$album" "$character" "$sha"
-    pager=$(printf '[%s/%s][%s/%s]' "$((selected + 1))" "$total" \
-      "$((image_selected + 1))" "$image_total")
+    sequence=
+    if [ "$type" = sequence ]; then
+      sequence=$(printf '%s/%s' "$((image_selected + 1))" "$image_total")
+    fi
+    display_metadata "$rows" "$artist" "$album" "$character" "$sha" \
+      "$sequence"
+    pager=$(printf '[%s/%s]' "$((selected + 1))" "$total")
     printf '\033[%s;1H\033[2K%s' "$rows" "$pager"
     printf '\033[H'
     display_image_start "$path" "$rows" "$cols" "$mime"

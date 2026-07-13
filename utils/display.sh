@@ -45,15 +45,27 @@ WHERE objects.id = $id;
 "
 }
 
+display_image_rows() {
+  local path
+  local view_size
+  path=$1
+  view_size=$2
+  chafa --probe off --format symbols --colors none --symbols ascii \
+    --animate off --scale max --align top,left --size "$view_size" --work 1 \
+    "$path" | awk 'END { print NR }'
+}
+
 display_image_start() {
   local path
   local rows
   local cols
   local mime
+  local view_size
   path=$1
   rows=$2
   cols=$3
   mime=$4
+  view_size="${cols}x$((rows - 7))"
   (
     local image_pid
     trap '
@@ -65,11 +77,11 @@ display_image_start() {
     display_cursor_position 1 1
     if [ "$mime" = image/gif ]; then
       chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --animate on \
-        --duration infinite --align top,left \
-        --size "${cols}x$((rows - 7))" "$path" &
+        --duration infinite --scale max --align top,left \
+        --size "$view_size" "$path" &
     else
       chafa --probe off --format "$ARTS_DISPLAY_FORMAT" --animate off \
-        --align top,left --size "${cols}x$((rows - 7))" "$path" &
+        --scale max --align top,left --size "$view_size" "$path" &
     fi
     image_pid=$!
     wait "$image_pid"
@@ -91,15 +103,15 @@ display_image_stop() {
 }
 
 display_metadata() {
-  local rows
+  local row
   local artist
   local album
   local character
-  rows=$1
+  row=$1
   artist=$2
   album=$3
   character=$4
-  printf '\033[%s;1H' "$((rows - 6))"
+  printf '\033[%s;1H' "$row"
   pair_reset
   pair_add artist "$artist"
   pair_add cat "$album"
@@ -112,6 +124,7 @@ display_browser() {
   local selected
   local image_total
   local image_selected
+  local image_rows
   local rows
   local cols
   local target
@@ -178,8 +191,9 @@ ORDER BY images.position;
     read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
     if ((rows < 10)); then rows=10; fi
     if ((cols < 20)); then cols=20; fi
+    image_rows=$(display_image_rows "$path" "${cols}x$((rows - 7))")
     display_clear_history
-    display_metadata "$rows" "$artist" "$album" "$character"
+    display_metadata "$((image_rows + 1))" "$artist" "$album" "$character"
     search_pager=$(printf '[%s/%s]' "$((selected + 1))" "$total")
     search_col=$((cols - ${#search_pager} + 1))
     printf '\033[%s;1H\033[2K' "$rows"

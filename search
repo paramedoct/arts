@@ -34,7 +34,9 @@ main() {
   case "$#" in
     0) ;;
     1)
-      [ "$1" != -- ] || usage
+      case "$1" in
+        -*) usage ;;
+      esac
       location=$1
       location_set=1
       ;;

@@ -152,67 +152,17 @@ display_metadata() {
   pair_print
 }
 
-display_image_browser() {
-  local id
-  local rows
-  local cols
-  local key
-  local record
-  local info
-  local sha
-  local artist
-  local album
-  local character
-  local mime
-  local path
-  id=$1
-  record=$(image_require "$id")
-  IFS=$'\t' read -r _ sha artist mime _ <<<"$record"
-  info=$(display_info "$id")
-  IFS=$'\t' read -r _ artist album character <<<"$info"
-  path=$(image_path "$artist" "$sha")
-  if [ ! -r "$path" ]; then
-    echo "stored image not found: $path" >&2
-    return 1
-  fi
-  while :; do
-    rows=24
-    cols=80
-    read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
-    if ((rows < 10)); then rows=10; fi
-    if ((cols < 20)); then cols=20; fi
-    printf '\033[2J\033[H'
-    display_metadata "$rows" "$artist" "$album" "$character" "$sha"
-    printf '\033[%s;1H\033[2K[1/1]' "$rows"
-    printf '\033[H'
-    display_image_start "$path" "$rows" "$cols" "$mime"
-    while :; do
-      key=$(display_read_key)
-      case "$key" in
-        d | D | b | B | q | Q | $'\033') break ;;
-      esac
-    done
-    display_image_stop
-    printf '\033[%s;1H\033[2K' "$rows"
-    case "$key" in
-      d | D)
-        if action_remove "$id"; then return 10; fi
-        ;;
-      b | B | q | Q | $'\033')
-        return 0
-        ;;
-    esac
-  done
-}
-
-display_sequence_browser() {
-  local sequence_id
+display_browser() {
   local total
   local selected
-  local shown_selected
+  local image_total
+  local image_selected
   local rows
   local cols
+  local target
+  local type
   local id
+  local ids
   local record
   local info
   local sha
@@ -223,73 +173,75 @@ display_sequence_browser() {
   local key
   local path
   local pager
-  local -a ids
-  local -a paths
-  local -a artists
-  local -a albums
-  local -a characters
-  local -a mimes
-  local -a shas
-  sequence_id=$1
-  shift
-  ids=("$@")
-  total=${#ids[@]}
-  [ "$total" -gt 0 ] || {
-    echo "sequence is empty: $sequence_id" >&2
-    return 1
-  }
-  paths=()
-  artists=()
-  albums=()
-  characters=()
-  mimes=()
-  shas=()
-  for id in "${ids[@]}"; do
+  local position
+  local -a image_ids
+  total=$#
+  if ((total == 0)); then
+    echo "no images found"
+    return 0
+  fi
+  selected=${DISPLAY_SELECTED:-0}
+  if ((selected >= total)); then selected=$((total - 1)); fi
+  if ((selected < 0)); then selected=0; fi
+  image_selected=0
+  while :; do
+    position=$((selected + 1))
+    target=${!position}
+    type=$(object_type "$target")
+    image_ids=()
+    ids=$(db_value "
+SELECT images.id FROM images
+WHERE images.object_id = $target
+ORDER BY images.position;
+")
+    while IFS= read -r id; do
+      [ -n "$id" ] || continue
+      image_ids+=("$id")
+    done <<<"$ids"
+    image_total=${#image_ids[@]}
+    [ "$image_total" -gt 0 ] || {
+      echo "object is empty: $target" >&2
+      return 1
+    }
+    if ((image_selected >= image_total)); then
+      image_selected=$((image_total - 1))
+    fi
+    id=${image_ids[$image_selected]}
     record=$(image_file_require "$id")
     IFS=$'\t' read -r _ sha artist mime _ <<<"$record"
-    info=$(display_info "$sequence_id")
+    info=$(display_info "$target")
     IFS=$'\t' read -r _ artist album character <<<"$info"
     path=$(image_path "$artist" "$sha")
     if [ ! -r "$path" ]; then
       echo "stored image not found: $path" >&2
       return 1
     fi
-    paths+=("$path")
-    artists+=("$artist")
-    albums+=("$album")
-    characters+=("$character")
-    mimes+=("$mime")
-    shas+=("$sha")
-  done
-  selected=0
-  shown_selected=-1
-  while :; do
     rows=24
     cols=80
     read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
     if ((rows < 10)); then rows=10; fi
     if ((cols < 20)); then cols=20; fi
-    if ((shown_selected >= 0 && shown_selected != selected)); then
-      display_clear_history
-    else
-      printf '\033[2J\033[H'
-    fi
-    display_metadata "$rows" "${artists[$selected]}" \
-      "${albums[$selected]}" "${characters[$selected]}" \
-      "${shas[$selected]}"
-    pager=$(printf '[%s/%s]' "$((selected + 1))" "$total")
+    display_clear_history
+    display_metadata "$rows" "$artist" "$album" "$character" "$sha"
+    pager=$(printf '[%s/%s][%s/%s]' "$((selected + 1))" "$total" \
+      "$((image_selected + 1))" "$image_total")
     printf '\033[%s;1H\033[2K%s' "$rows" "$pager"
     printf '\033[H'
-    display_image_start "${paths[$selected]}" "$rows" "$cols" \
-      "${mimes[$selected]}"
+    display_image_start "$path" "$rows" "$cols" "$mime"
     while :; do
       key=$(display_read_key)
       case "$key" in
-        $'\033[A' | $'\033[D')
+        $'\033[A')
           ((selected > 0)) && break
           ;;
-        $'\033[B' | $'\033[C')
+        $'\033[B')
           ((selected + 1 < total)) && break
+          ;;
+        $'\033[D')
+          ((image_selected > 0)) && break
+          ;;
+        $'\033[C')
+          ((image_selected + 1 < image_total)) && break
           ;;
         x | X | d | D | b | B | q | Q | $'\033') break ;;
       esac
@@ -298,54 +250,44 @@ display_sequence_browser() {
       printf '\033[%s;1H\n' "$rows"
       return 1
     fi
-    shown_selected=$selected
     printf '\033[%s;1H\033[2K' "$rows"
     case "$key" in
-      $'\033[A' | $'\033[D')
+      $'\033[A')
         selected=$((selected - 1))
+        image_selected=0
         ;;
-      $'\033[B' | $'\033[C')
+      $'\033[B')
         selected=$((selected + 1))
+        image_selected=0
+        ;;
+      $'\033[D')
+        image_selected=$((image_selected - 1))
+        ;;
+      $'\033[C')
+        image_selected=$((image_selected + 1))
         ;;
       x | X)
-        if action_sequence_image_remove "$sequence_id" "${ids[$selected]}" \
-          "$((selected + 1))"; then
-          return 10
+        if [ "$type" = sequence ] && \
+          action_sequence_image_remove "$target" "$id" \
+            "$((image_selected + 1))"; then
+          if [ -z "$(object_type "$target")" ]; then
+            DISPLAY_SELECTED=$selected
+            return 10
+          fi
         fi
         ;;
       d | D)
-        if action_remove "$sequence_id"; then return 10; fi
+        if action_remove "$target"; then
+          DISPLAY_SELECTED=$selected
+          return 10
+        fi
         ;;
       b | B | q | Q | $'\033')
-        printf '\033[2J\033[H'
+        display_clear_history
         return 0
         ;;
     esac
   done
-}
-
-display_target() {
-  local target
-  local type
-  local ids
-  local id
-  local -a image_ids
-  target=$1
-  type=$(object_type "$target")
-  case "$type" in
-    image)
-      display_image_browser "$target"
-      ;;
-    sequence)
-      image_ids=()
-      ids=$(sequence_image_ids "$target")
-      while IFS= read -r id; do
-        [ -n "$id" ] || continue
-        image_ids+=("$id")
-      done <<<"$ids"
-      display_sequence_browser "$target" "${image_ids[@]}"
-      ;;
-  esac
 }
 
 display_previews() {
@@ -442,113 +384,12 @@ ORDER BY position LIMIT 1;
 
 display_pager() {
   local limit
-  local total
-  local pages
-  local page
-  local key
-  local rest
-  local rows
-  local cols
-  local selected
-  local start
-  local end
-  local position
-  local target
-  local redraw
-  local shown_page
   limit=$1
   shift
   display_validate_limit "$limit"
-  total=$#
-  if ((total == 0)); then
-    echo "no images found"
+  if [ ! -t 0 ] || [ ! -t 1 ]; then
+    display_page 0 "$limit" "$@"
     return 0
   fi
-  pages=$(((total + limit - 1) / limit))
-  page=${DISPLAY_PAGE:-0}
-  if ((page >= pages)); then page=$((pages - 1)); fi
-  if ((page < 0)); then page=0; fi
-  redraw=1
-  shown_page=-1
-  while :; do
-    DISPLAY_PAGE=$page
-    if [ "$redraw" -eq 1 ]; then
-      if [ -t 0 ] && [ -t 1 ]; then
-        if ((shown_page < 0 || shown_page != page)); then
-          display_clear_history
-        else
-          printf '\033[2J\033[H'
-        fi
-      fi
-      display_page "$page" "$limit" "$@"
-      shown_page=$page
-      if [ ! -t 0 ] || [ ! -t 1 ]; then
-        return 0
-      fi
-      display_cursor_hide
-    fi
-    redraw=1
-    rows=24
-    cols=80
-    read -r rows cols < <(stty size </dev/tty 2>/dev/null || printf '24 80\n')
-    if ((rows < 10)); then rows=10; fi
-    printf '\033[%s;1H\033[2K[%s/%s]' "$rows" "$((page + 1))" "$pages"
-    key=$(display_read_key)
-    printf '\033[%s;1H\033[2K' "$rows"
-    case "$key" in
-      $'\033[A' | $'\033[D')
-        if ((page > 0)); then
-          page=$((page - 1))
-        else
-          redraw=0
-        fi
-        ;;
-      $'\033[B' | $'\033[C')
-        if ((page + 1 < pages)); then
-          page=$((page + 1))
-        else
-          redraw=0
-        fi
-        ;;
-      q | Q | $'\033')
-        display_clear_history
-        return 0
-        ;;
-      '') redraw=0 ;;
-      *[!0-9]* | ??*)
-        redraw=0
-        ;;
-      *)
-        start=$((page * limit))
-        end=$((start + limit))
-        if ((end > total)); then end=$total; fi
-        selected=$((start + 10#$key))
-        if ((selected >= start && selected < end)); then
-          position=$((selected + 1))
-          target=${!position}
-          if [ -t 0 ] && [ -t 1 ]; then
-            display_clear_history
-          fi
-          if display_target "$target"; then
-            if [ -t 0 ] && [ -t 1 ]; then
-              display_clear_history
-            fi
-            continue
-          else
-            rest=$?
-          fi
-          if [ -t 0 ] && [ -t 1 ]; then
-            display_clear_history
-          fi
-          if [ "$rest" -eq 10 ]; then
-            DISPLAY_PAGE=$page
-            return 10
-          fi
-          return "$rest"
-        else
-          redraw=0
-        fi
-        ;;
-    esac
-  done
+  display_browser "$@"
 }

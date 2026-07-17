@@ -151,7 +151,6 @@ WHERE id = $target;
       artist "$artist" cat "$cat" topic "$topic"
     pager=$(printf '[%s/%s]' "$((selected + 1))" "$total")
     printf '\033[%s;1H\033[2K' "$rows"
-    display_cursor_position "$rows" "$((cols - ${#pager} + 1))"
     printf '%s' "$pager"
     printf '\033[H'
     display_image_start "$path" "$rows" "$cols" "$mime"

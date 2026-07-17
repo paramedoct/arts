@@ -34,20 +34,13 @@ gather_add_file() {
   mime=$(file -b --mime-type -- "$input")
   case "$mime" in
     application/zip | application/x-zip | application/x-zip-compressed)
-      archive_add "$artist" "$cat" "$topic" "$input"
+      archive_add "$artist" "$cat" "$topic" "$input" || status=$?
       ;;
     *)
-      if image_add "$artist" "$cat" "$topic" "$input"; then
-        return 0
-      else
-        status=$?
-      fi
-      if [ "$status" -eq 2 ]; then
-        return 0
-      fi
-      return "$status"
+      image_add "$artist" "$cat" "$topic" "$input" || status=$?
       ;;
   esac
+  [ "${status:-0}" -eq 2 ] || return "${status:-0}"
 }
 
 main() {
@@ -56,7 +49,6 @@ main() {
   local cat
   local topic
   local input
-  local status
   [ "$#" -ge 2 ] || usage
   location=$1
   shift
@@ -64,15 +56,7 @@ main() {
   IFS=$'\t' read -r artist cat topic \
     < <(classification_parse_location "$location" add)
   for input in "$@"; do
-    if gather_add_file "$artist" "$cat" "$topic" "$input"; then
-      continue
-    else
-      status=$?
-    fi
-    if [ "$status" -eq 2 ]; then
-      continue
-    fi
-    return "$status"
+    gather_add_file "$artist" "$cat" "$topic" "$input"
   done
 }
 

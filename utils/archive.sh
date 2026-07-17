@@ -9,7 +9,6 @@ archive_add() (
   local file
   local mime
   local image_id
-  local sequence_id
   local count
   local status
   local -a image_ids
@@ -57,7 +56,7 @@ archive_add() (
     return 1
   fi
   for file in "${files[@]}"; do
-    if image_id=$(image_add "$artist" "$cat" "$topic" "$file" id); then
+    if image_id=$(image_add "$artist" "$cat" "$topic" "$file"); then
       image_ids+=("$image_id")
       continue
     else
@@ -67,12 +66,10 @@ archive_add() (
       image_remove "$image_id"
     done
     if [ "$status" -eq 2 ]; then
-      echo "sequence skipped: zip contains a duplicate image" >&2
+      echo "archive skipped: zip contains a duplicate image" >&2
       return 2
     fi
     return "$status"
   done
-  sequence_id=$(db_value \
-    "SELECT sequence_id FROM images WHERE id = ${image_ids[0]};")
-  printf '%s\n' "$sequence_id"
+  printf '%s\n' "${image_ids[@]}"
 )

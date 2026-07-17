@@ -27,12 +27,9 @@ image_require() {
   classification_validate_id image "${1:-}"
   record=$(db_value "
 SELECT images.id || char(9) || images.sha256 || char(9) ||
-       artists.name || char(9) || images.mime_type || char(9) ||
-       images.byte_size || char(9) || images.sequence_id || char(9) ||
-       images.position
+       images.artist || char(9) || images.mime_type || char(9) ||
+       images.byte_size
 FROM images
-JOIN sequences ON sequences.id = images.sequence_id
-JOIN artists ON artists.id = sequences.artist_id
 WHERE images.id = $1;
 ")
   if [ -z "$record" ]; then
@@ -40,47 +37,6 @@ WHERE images.id = $1;
     return 1
   fi
   printf '%s\n' "$record"
-}
-
-image_insert() {
-  local artist_sql
-  local cat_sql
-  local topic_sql
-  local topic_id_sql
-  local topic_statement
-  artist_sql=$(db_quote "$1")
-  cat_sql=$(db_quote "$2")
-  topic_sql=$(db_quote "$3")
-  topic_id_sql=NULL
-  topic_statement=
-  if [ -n "$3" ]; then
-    topic_id_sql="(SELECT id FROM topics WHERE name = $topic_sql)"
-    topic_statement="INSERT OR IGNORE INTO topics (name) VALUES ($topic_sql);"
-  fi
-  db_value "
-BEGIN IMMEDIATE;
-INSERT OR IGNORE INTO artists (name) VALUES ($artist_sql);
-INSERT OR IGNORE INTO cats (artist_id, name)
-SELECT id, $cat_sql FROM artists WHERE name = $artist_sql;
-$topic_statement
-INSERT OR IGNORE INTO sequences (artist_id, cat_id, topic_id)
-SELECT artists.id, cats.id, $topic_id_sql
-FROM artists
-JOIN cats ON cats.artist_id = artists.id
-WHERE artists.name = $artist_sql AND cats.name = $cat_sql;
-INSERT INTO images (sequence_id, position, sha256, mime_type, byte_size)
-SELECT sequences.id, COALESCE(max(images.position), 0) + 1,
-       $(db_quote "$6"), $(db_quote "$4"), $5
-FROM sequences
-JOIN artists ON artists.id = sequences.artist_id
-JOIN cats ON cats.id = sequences.cat_id
-LEFT JOIN images ON images.sequence_id = sequences.id
-WHERE artists.name = $artist_sql AND cats.name = $cat_sql
-  AND sequences.topic_id IS $topic_id_sql
-GROUP BY sequences.id;
-SELECT $7 FROM images WHERE sha256 = $(db_quote "$6");
-COMMIT;
-"
 }
 
 image_add() {
@@ -92,7 +48,6 @@ image_add() {
   local existing_id
   local mime
   local size
-  local result_column
   local target_dir
   local target
   local temporary
@@ -101,14 +56,6 @@ image_add() {
   cat=$2
   topic=$3
   file=$4
-  result_column=${5:-sequence_id}
-  case "$result_column" in
-    id | sequence_id) ;;
-    *)
-      echo "invalid image result column: $result_column" >&2
-      return 1
-      ;;
-  esac
   classification_validate_name artist "$artist"
   classification_validate_name cat "$cat"
   if [ -n "$topic" ]; then classification_validate_name topic "$topic"; fi
@@ -118,7 +65,7 @@ image_add() {
   fi
   sha=$(image_sha256 "$file")
   existing_id=$(db_value \
-    "SELECT sequence_id FROM images WHERE sha256 = $(db_quote "$sha");")
+    "SELECT id FROM images WHERE sha256 = $(db_quote "$sha");")
   if [ -n "$existing_id" ]; then
     echo "duplicate image skipped: sha256 $sha" >&2
     return 2
@@ -145,8 +92,12 @@ image_add() {
     rm -f "$temporary"
     return 1
   fi
-  if ! id=$(image_insert \
-    "$artist" "$cat" "$topic" "$mime" "$size" "$sha" "$result_column"); then
+  if ! id=$(db_value "
+INSERT INTO images (artist, cat, topic, sha256, mime_type, byte_size)
+VALUES ($(db_quote "$artist"), $(db_quote "$cat"),
+        NULLIF($(db_quote "$topic"), ''), $(db_quote "$sha"),
+        $(db_quote "$mime"), $size);
+SELECT id FROM images WHERE sha256 = $(db_quote "$sha");"); then
     rm -f "$target"
     return 1
   fi
@@ -155,20 +106,12 @@ image_add() {
 
 image_remove() {
   local id
-  local expected_sequence_id
   local record
   local sha
   local artist
-  local sequence_id
   id=$1
-  expected_sequence_id=${2:-}
   record=$(image_require "$id")
-  IFS=$'\t' read -r _ sha artist _ _ sequence_id _ <<<"$record"
-  if [ -n "$expected_sequence_id" ] &&
-    [ "$sequence_id" != "$expected_sequence_id" ]; then
-    echo "image is not in sequence: $id" >&2
-    return 1
-  fi
+  IFS=$'\t' read -r _ sha artist _ _ <<<"$record"
   db_run "DELETE FROM images WHERE id = $id;"
   image_file_delete "$artist" "$sha"
 }

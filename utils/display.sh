@@ -93,15 +93,12 @@ display_image_stop() {
 display_browser() {
   local total
   local selected
-  local image_total
-  local image_selected
   local image_rows
   local rows
   local cols
   local target
   local id
   local record
-  local records
   local sha
   local artist
   local cat
@@ -109,13 +106,9 @@ display_browser() {
   local mime
   local key
   local path
-  local search_pager
-  local image_pager
-  local search_col
-  local search_delta
-  local image_delta
+  local pager
+  local delta
   local position
-  local -a images
   total=$#
   if ((total == 0)); then
     echo "no images found"
@@ -124,34 +117,19 @@ display_browser() {
   selected=${DISPLAY_SELECTED:-0}
   if ((selected >= total)); then selected=$((total - 1)); fi
   if ((selected < 0)); then selected=0; fi
-  image_selected=0
   while :; do
     position=$((selected + 1))
     target=${!position}
-    images=()
-    records=$(db_value "
-SELECT images.id || char(9) || images.sha256 || char(9) || artists.name ||
-       char(9) || images.mime_type || char(9) || cats.name || char(9) ||
-       COALESCE(topics.name, '-')
+    record=$(db_value "
+SELECT id || char(9) || sha256 || char(9) || artist || char(9) || mime_type ||
+       char(9) || cat || char(9) || COALESCE(topic, '-')
 FROM images
-JOIN sequences ON sequences.id = images.sequence_id
-JOIN artists ON artists.id = sequences.artist_id
-JOIN cats ON cats.id = sequences.cat_id
-LEFT JOIN topics ON topics.id = sequences.topic_id
-WHERE sequences.id = $target ORDER BY images.position;
+WHERE id = $target;
 ")
-    while IFS= read -r record; do
-      [ -n "$record" ] && images+=("$record")
-    done <<<"$records"
-    image_total=${#images[@]}
-    [ "$image_total" -gt 0 ] || {
-      echo "sequence is empty: $target" >&2
+    [ -n "$record" ] || {
+      echo "image not found: $target" >&2
       return 1
     }
-    if ((image_selected >= image_total)); then
-      image_selected=$((image_total - 1))
-    fi
-    record=${images[$image_selected]}
     IFS=$'\t' read -r id sha artist mime cat topic <<<"$record"
     path=$(image_path "$artist" "$sha")
     if [ ! -r "$path" ]; then
@@ -171,36 +149,23 @@ WHERE sequences.id = $target ORDER BY images.position;
     printf '\033[%s;1H' "$((image_rows + 1))"
     printf '%-6s %s\n%-6s %s\n%-6s %s\n' \
       artist "$artist" cat "$cat" topic "$topic"
-    search_pager=$(printf '[%s/%s]' "$((selected + 1))" "$total")
-    search_col=$((cols - ${#search_pager} + 1))
+    pager=$(printf '[%s/%s]' "$((selected + 1))" "$total")
     printf '\033[%s;1H\033[2K' "$rows"
-    image_pager=$(printf '[%s/%s]' "$((image_selected + 1))" "$image_total")
-    printf '%s' "$image_pager"
-    if ((search_col > ${#image_pager} + 1)); then
-      display_cursor_position "$rows" "$search_col"
-      printf '%s' "$search_pager"
-    else
-      printf ' %s' "$search_pager"
-    fi
+    display_cursor_position "$rows" "$((cols - ${#pager} + 1))"
+    printf '%s' "$pager"
     printf '\033[H'
     display_image_start "$path" "$rows" "$cols" "$mime"
     while :; do
       key=$(display_read_key)
-      search_delta=0
-      image_delta=0
+      delta=0
       case "$key" in
-        $'\033[A') search_delta=-1 ;;
-        $'\033[B') search_delta=1 ;;
-        $'\033[D') image_delta=-1 ;;
-        $'\033[C') image_delta=1 ;;
+        $'\033[A') delta=-1 ;;
+        $'\033[B') delta=1 ;;
         x | X) break ;;
-        d | D | b | B | q | Q | $'\033') break ;;
+        b | B | q | Q | $'\033') break ;;
         *) continue ;;
       esac
-      if ((selected + search_delta >= 0 &&
-        selected + search_delta < total &&
-        image_selected + image_delta >= 0 &&
-        image_selected + image_delta < image_total)); then
+      if ((selected + delta >= 0 && selected + delta < total)); then
         break
       fi
     done
@@ -209,27 +174,10 @@ WHERE sequences.id = $target ORDER BY images.position;
       return 1
     fi
     printf '\033[%s;1H\033[2K' "$rows"
-    selected=$((selected + search_delta))
-    if ((search_delta == 0)); then
-      image_selected=$((image_selected + image_delta))
-    else
-      image_selected=0
-    fi
+    selected=$((selected + delta))
     case "$key" in
       x | X)
-        if display_action_confirm \
-          "remove image $((image_selected + 1)) from sequence $target" &&
-          image_remove "$id" "$target"; then
-          if [ -z "$(db_value \
-            "SELECT id FROM sequences WHERE id = $target;")" ]; then
-            DISPLAY_SELECTED=$selected
-            return 10
-          fi
-        fi
-        ;;
-      d | D)
-        if display_action_confirm "remove sequence $target" &&
-          sequence_remove "$target"; then
+        if display_action_confirm "remove image $target" && image_remove "$id"; then
           DISPLAY_SELECTED=$selected
           return 10
         fi

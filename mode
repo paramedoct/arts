@@ -11,12 +11,12 @@ usage() {
 source "$ROOT_DIR/utils/source.sh"
 source_modules \
   utils/db.sh \
-  utils/profile.sh
+  utils/environment.sh
 
 main() {
   local format
   [ "$#" -le 1 ] || usage
-  profile_prepare
+  environment_prepare
   if [ "$#" -eq 0 ]; then
     printf '%s\n' "$ARTS_DISPLAY_FORMAT"
     return 0

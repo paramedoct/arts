@@ -45,7 +45,7 @@
 - keep shared shell modules in `utils/`
 - keep Debian and iSH dependency installers in `3rdparty/`
 - keep integration checks in `tests/`
-- initialize runtime paths and the database through a shared profile module
+- initialize runtime paths and the database through a shared environment module
 
 ## storage and data
 

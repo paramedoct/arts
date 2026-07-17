@@ -11,7 +11,7 @@ usage() {
 source "$ROOT_DIR/utils/source.sh"
 source_modules \
   utils/db.sh \
-  utils/profile.sh \
+  utils/environment.sh \
   utils/object.sh \
   utils/image.sh \
   utils/classification.sh \
@@ -45,7 +45,7 @@ main() {
       ;;
     *) usage ;;
   esac
-  profile_prepare
+  environment_prepare
   if [ -t 0 ] && [ -t 1 ]; then
     display_cursor_hide
     trap display_cursor_show EXIT

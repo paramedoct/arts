@@ -11,7 +11,7 @@ usage() {
 source "$ROOT_DIR/utils/source.sh"
 source_modules \
   utils/db.sh \
-  utils/profile.sh \
+  utils/environment.sh \
   utils/object.sh \
   utils/image.sh \
   utils/classification.sh \
@@ -62,7 +62,7 @@ main() {
   [ "$#" -ge 2 ] || usage
   location=$1
   shift
-  profile_prepare
+  environment_prepare
   IFS=$'\t' read -r artist cat topic \
     < <(classification_parse_add_location "$location")
   for input in "$@"; do

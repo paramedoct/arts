@@ -17,7 +17,7 @@ db_value() {
 db_init() {
   local sql
   local violations
-  sql=$(<"$ROOT_DIR/schema.sql")
+  sql=$(<"$ROOT_DIR/schema/schema.sql")
   db_run "$sql"
   violations=$(db_value "PRAGMA foreign_key_check;")
   if [ -n "$violations" ]; then

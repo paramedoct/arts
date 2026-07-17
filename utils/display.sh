@@ -153,7 +153,8 @@ display_browser() {
     target=${!position}
     sequence_require "$target" >/dev/null
     image_ids=()
-    ids=$(query_sequence_image_ids "$target")
+    ids=$(db_value "SELECT id FROM images
+WHERE sequence_id = $target ORDER BY position;")
     while IFS= read -r id; do
       [ -n "$id" ] || continue
       image_ids+=("$id")
@@ -169,7 +170,15 @@ display_browser() {
     id=${image_ids[$image_selected]}
     record=$(image_require "$id")
     IFS=$'\t' read -r _ sha artist mime _ <<<"$record"
-    info=$(query_sequence_info "$target")
+    info=$(db_value "
+SELECT sequences.id || char(9) || artists.name || char(9) || cats.name ||
+       char(9) || COALESCE(topics.name, '-')
+FROM sequences
+JOIN artists ON artists.id = sequences.artist_id
+JOIN cats ON cats.id = sequences.cat_id
+LEFT JOIN topics ON topics.id = sequences.topic_id
+WHERE sequences.id = $target;
+")
     IFS=$'\t' read -r _ artist cat topic <<<"$info"
     path=$(image_path "$artist" "$sha")
     if [ ! -r "$path" ]; then
@@ -240,7 +249,8 @@ display_browser() {
         if display_action_confirm \
           "remove image $((image_selected + 1)) from sequence $target" &&
           sequence_image_remove "$target" "$id"; then
-          if [ -z "$(query_sequence_exists "$target")" ]; then
+          if [ -z "$(db_value \
+            "SELECT id FROM sequences WHERE id = $target;")" ]; then
             DISPLAY_SELECTED=$selected
             return 10
           fi

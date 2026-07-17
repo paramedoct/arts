@@ -31,3 +31,22 @@ JOIN artists ON artists.id = objects.artist_id
 WHERE objects.id = $id;
 "
 }
+
+object_remove() {
+  local id
+  id=$1
+  db_run "
+BEGIN IMMEDIATE;
+DELETE FROM objects WHERE id = $id;
+DELETE FROM topics WHERE NOT EXISTS (
+  SELECT 1 FROM objects WHERE objects.topic_id = topics.id
+);
+DELETE FROM cats WHERE NOT EXISTS (
+  SELECT 1 FROM objects WHERE objects.cat_id = cats.id
+);
+DELETE FROM artists WHERE NOT EXISTS (
+  SELECT 1 FROM objects WHERE objects.artist_id = artists.id
+);
+COMMIT;
+"
+}

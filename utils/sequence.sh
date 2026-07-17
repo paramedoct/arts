@@ -72,7 +72,6 @@ sequence_remove() {
   local records
   local sha
   local artist
-  local path
   id=$1
   sequence_require "$id" >/dev/null
   records=$(db_value "
@@ -82,25 +81,10 @@ JOIN objects ON objects.id = images.object_id
 JOIN artists ON artists.id = objects.artist_id
 WHERE objects.id = $id ORDER BY images.position;
 ")
-  db_run "
-BEGIN IMMEDIATE;
-DELETE FROM objects WHERE id = $id;
-DELETE FROM topics WHERE NOT EXISTS (
-  SELECT 1 FROM objects WHERE objects.topic_id = topics.id
-);
-DELETE FROM cats WHERE NOT EXISTS (
-  SELECT 1 FROM objects WHERE objects.cat_id = cats.id
-);
-DELETE FROM artists WHERE NOT EXISTS (
-  SELECT 1 FROM objects WHERE objects.artist_id = artists.id
-);
-COMMIT;
-"
+  object_remove "$id"
   while IFS=$'\t' read -r sha artist; do
     [ -n "$sha" ] || continue
-    path=$(image_path "$artist" "$sha")
-    rm -f -- "$path"
-    rmdir "$ARTS_IMAGES_DIR/$artist" 2>/dev/null || true
+    image_file_delete "$artist" "$sha"
   done <<<"$records"
 }
 
@@ -135,7 +119,6 @@ sequence_image_remove() {
   local object_id
   local position
   local count
-  local path
   sequence_id=$1
   image_id=$2
   sequence_require "$sequence_id" >/dev/null
@@ -161,6 +144,5 @@ UPDATE objects SET type = 'image'
 WHERE id = $sequence_id AND $count = 2;
 COMMIT;
 "
-  path=$(image_path "$artist" "$sha")
-  rm -f -- "$path"
+  image_file_delete "$artist" "$sha"
 }

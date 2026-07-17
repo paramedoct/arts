@@ -1,3 +1,38 @@
+action_confirm() {
+  local prompt
+  local answer
+  prompt=$1
+  printf '%s' "$prompt [y/N]: " >/dev/tty
+  IFS= read -r answer </dev/tty
+  case "$answer" in
+    y | Y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+action_remove() {
+  local object_id
+  local type
+  object_id=$1
+  type=$(object_type "$object_id")
+  action_confirm "remove $type $object_id" || return 1
+  case "$type" in
+    image) image_remove "$object_id" ;;
+    sequence) sequence_remove "$object_id" ;;
+  esac
+}
+
+action_sequence_image_remove() {
+  local sequence_id
+  local image_id
+  local position
+  sequence_id=$1
+  image_id=$2
+  position=$3
+  action_confirm "remove image $position from sequence $sequence_id" || return 1
+  sequence_image_remove "$sequence_id" "$image_id"
+}
+
 display_clear_history() {
   printf '\033[H\033[2J\033[3J'
 }
@@ -112,11 +147,8 @@ display_metadata() {
   album=$3
   character=$4
   printf '\033[%s;1H' "$row"
-  pair_reset
-  pair_add artist "$artist"
-  pair_add cat "$album"
-  pair_add topic "$character"
-  pair_print
+  printf '%-6s %s\n%-6s %s\n%-6s %s\n' \
+    artist "$artist" cat "$album" topic "$character"
 }
 
 display_browser() {

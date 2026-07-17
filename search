@@ -17,8 +17,6 @@ source_modules \
   utils/album.sh \
   utils/sequence.sh \
   utils/search.sh \
-  utils/action.sh \
-  utils/pair.sh \
   utils/display.sh
 
 main() {

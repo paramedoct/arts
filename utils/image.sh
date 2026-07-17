@@ -33,6 +33,15 @@ image_path() {
   printf '%s/%s/%s\n' "$ARTS_IMAGES_DIR" "$1" "$2"
 }
 
+image_file_delete() {
+  local artist
+  local sha
+  artist=$1
+  sha=$2
+  rm -f -- "$(image_path "$artist" "$sha")"
+  rmdir "$ARTS_IMAGES_DIR/$artist" 2>/dev/null || true
+}
+
 image_record() {
   local id
   id=$1
@@ -183,27 +192,9 @@ image_remove() {
   local record
   local sha
   local artist
-  local path
   id=$1
   record=$(image_require "$id")
   IFS=$'\t' read -r _ sha artist _ <<<"$record"
-  path=$(image_path "$artist" "$sha")
-  db_run "
-BEGIN IMMEDIATE;
-DELETE FROM images
-WHERE object_id = $id;
-DELETE FROM objects WHERE id = $id;
-DELETE FROM topics WHERE NOT EXISTS (
-  SELECT 1 FROM objects WHERE objects.topic_id = topics.id
-);
-DELETE FROM cats WHERE NOT EXISTS (
-  SELECT 1 FROM objects WHERE objects.cat_id = cats.id
-);
-DELETE FROM artists WHERE NOT EXISTS (
-  SELECT 1 FROM objects WHERE objects.artist_id = artists.id
-);
-COMMIT;
-"
-  rm -f -- "$path"
-  rmdir "$ARTS_IMAGES_DIR/$artist" 2>/dev/null || true
+  object_remove "$id"
+  image_file_delete "$artist" "$sha"
 }

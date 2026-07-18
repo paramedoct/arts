@@ -117,7 +117,7 @@ display_browser() {
     position=$((selected + 1))
     target=${!position}
     record=$(image_require "$target")
-    IFS=$'\t' read -r id sha artist mime cat topic <<<"$record"
+    IFS=$'\t' read -r id sha artist mime cat topic _ <<<"$record"
     path=$(image_path "$artist" "$sha")
     if [ ! -r "$path" ]; then
       echo "stored image not found: $path" >&2

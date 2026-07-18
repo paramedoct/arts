@@ -1,10 +1,13 @@
 display_action_confirm() {
-  local prompt
-  local answer
-  prompt=$1
-  printf '%s' "$prompt [y/N]: " >/dev/tty
-  IFS= read -r answer </dev/tty
-  case "$answer" in
+  local rows
+  local pager
+  local key
+  rows=$1
+  pager=$2
+  printf '\033[%s;1H\033[2K\033[7m%s\033[0m' "$rows" "$pager"
+  key=$(display_read_key)
+  printf '\033[%s;1H\033[2K%s' "$rows" "$pager"
+  case "$key" in
     y | Y) return 0 ;;
     *) return 1 ;;
   esac
@@ -161,7 +164,7 @@ display_browser() {
     selected=$(((selected + delta + total) % total))
     case "$key" in
       x | X)
-        if display_action_confirm "remove image $target" && image_remove "$id"; then
+        if display_action_confirm "$rows" "$pager" && image_remove "$id"; then
           DISPLAY_SELECTED=$selected
           return 10
         fi

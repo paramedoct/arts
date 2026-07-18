@@ -8,7 +8,7 @@ display_action_confirm() {
   key=$(display_read_key)
   printf '\033[%s;1H\033[2K%s' "$rows" "$pager"
   case "$key" in
-    y | Y) return 0 ;;
+    '' | y | Y) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -146,13 +146,13 @@ display_browser() {
       key=$(display_read_key)
       delta=0
       case "$key" in
-        $'\033[A') delta=-1 ;;
-        $'\033[B') delta=1 ;;
+        $'\033[A' | $'\033[D') delta=-1 ;;
+        $'\033[B' | $'\033[C') delta=1 ;;
         x | X)
           if display_action_confirm "$rows" "$pager"; then break; fi
           continue
           ;;
-        b | B | q | Q | $'\033') break ;;
+        q | Q | $'\033') break ;;
         *) continue ;;
       esac
       if ((delta != 0)); then
@@ -172,7 +172,7 @@ display_browser() {
           return 10
         fi
         ;;
-      b | B | q | Q | $'\033')
+      q | Q | $'\033')
         display_clear_history
         return 0
         ;;

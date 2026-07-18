@@ -4,7 +4,7 @@ display_action_confirm() {
   local key
   rows=$1
   pager=$2
-  printf '\033[%s;1H\033[2K\033[7m%s\033[0m' "$rows" "$pager"
+  printf '\033[%s;1H\033[2K\033[1;37;41m%s\033[0m' "$rows" "$pager"
   key=$(display_read_key)
   printf '\033[%s;1H\033[2K%s' "$rows" "$pager"
   case "$key" in

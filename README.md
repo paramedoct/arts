@@ -1,3 +1,4 @@
 ## SCRY
-- Query image collection in terminal
+- Picture metadata management
+- Picture display
 <br></br>
